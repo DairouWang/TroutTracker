@@ -56,9 +56,37 @@ aws cloudformation deploy \
 
 echo "Step 2: Packaging and deploying Scraper Lambda..."
 cd ../backend/scraper
-pip install -r requirements.txt -t .
-echo "Creating zip package (excluding test files)..."
-zip -r scraper.zip . -x "*.pyc" -x "__pycache__/*" -x "*/tests/*" -x "*/test/*" -x "*.pyx" -x "*.pxi" -q
+
+# Install dependencies
+pip install -r requirements.txt -t . --no-cache-dir
+
+# Remove unnecessary files to reduce package size
+echo "Optimizing package size..."
+find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+find . -type f -name "*.pyo" -delete 2>/dev/null || true
+find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+
+# Create optimized zip package
+echo "Creating optimized zip package..."
+zip -r scraper.zip . \
+    -x "*.pyc" \
+    -x "*__pycache__*" \
+    -x "*/tests/*" \
+    -x "*/test/*" \
+    -x "*.pyx" \
+    -x "*.pxi" \
+    -x "*.c" \
+    -x "*.cpp" \
+    -x "*.md" \
+    -q
+
+# Check package size
+PACKAGE_SIZE=$(du -h scraper.zip | cut -f1)
+echo "📦 Package size: $PACKAGE_SIZE"
 
 SCRAPER_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --stack-name $STACK_NAME \
@@ -78,9 +106,33 @@ echo "Scraper Lambda deployed successfully!"
 
 echo "Step 3: Packaging and deploying API Lambda..."
 cd ../api
-pip install -r requirements.txt -t .
-echo "Creating zip package..."
-zip -r api.zip . -x "*.pyc" -x "__pycache__/*" -x "*/tests/*" -x "*/test/*" -q
+
+# Install dependencies
+pip install -r requirements.txt -t . --no-cache-dir
+
+# Remove unnecessary files
+echo "Optimizing package size..."
+find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+find . -type f -name "*.pyo" -delete 2>/dev/null || true
+find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+
+# Create optimized zip package
+echo "Creating optimized zip package..."
+zip -r api.zip . \
+    -x "*.pyc" \
+    -x "*__pycache__*" \
+    -x "*/tests/*" \
+    -x "*/test/*" \
+    -x "*.md" \
+    -q
+
+# Check package size
+PACKAGE_SIZE=$(du -h api.zip | cut -f1)
+echo "📦 Package size: $PACKAGE_SIZE"
 
 API_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --stack-name $STACK_NAME \

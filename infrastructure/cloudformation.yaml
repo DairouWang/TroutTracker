@@ -1,0 +1,312 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TroutTracker - Trout Stocking Tracker Infrastructure'
+
+Parameters:
+  GoogleGeocodingApiKey:
+    Type: String
+    Description: Google Geocoding API Key
+    NoEcho: true
+
+  ProjectName:
+    Type: String
+    Default: TroutTracker
+    Description: Project Name
+
+Resources:
+  # DynamoDB Table
+  TroutStockingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-StockingData'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: stock_date
+          AttributeType: S
+        - AttributeName: lake_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: lake-date-index
+          KeySchema:
+            - AttributeName: lake_name
+              KeyType: HASH
+            - AttributeName: stock_date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: date-index
+          KeySchema:
+            - AttributeName: stock_date
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-LambdaExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt TroutStockingTable.Arn
+                  - !Sub '${TroutStockingTable.Arn}/index/*'
+
+  # Scraper Lambda Function
+  ScraperLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-Scraper'
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref TroutStockingTable
+          GOOGLE_GEOCODING_API_KEY: !Ref GoogleGeocodingApiKey
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'Placeholder'}
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # API Lambda Function
+  ApiLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-API'
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref TroutStockingTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'Placeholder'}
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # CloudWatch Events Rule - Trigger daily at 9:00 AM PST
+  ScraperScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-DailyScraper'
+      Description: 'Trigger scraper daily at 9:00 AM PST'
+      ScheduleExpression: 'cron(0 17 * * ? *)'  # 9 AM PST = 5 PM UTC (accounting for timezone)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ScraperLambdaFunction.Arn
+          Id: ScraperTarget
+
+  # Allow CloudWatch Events to invoke Lambda
+  ScraperLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ScraperLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScraperScheduleRule.Arn
+
+  # API Gateway REST API
+  TroutTrackerApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-API'
+      Description: 'TroutTracker REST API'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway 资源 - /trout
+  TroutResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ParentId: !GetAtt TroutTrackerApi.RootResourceId
+      PathPart: trout
+
+  # API Gateway 资源 - /trout/stats
+  StatsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ParentId: !Ref TroutResource
+      PathPart: stats
+
+  # API Gateway Method - GET /trout
+  TroutGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref TroutResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Gateway Method - OPTIONS /trout (CORS)
+  TroutOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref TroutResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Gateway Method - GET /trout/stats
+  StatsGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref StatsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - TroutGetMethod
+      - TroutOptionsMethod
+      - StatsGetMethod
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      StageName: prod
+
+  # Lambda Permission - Allow API Gateway to invoke
+  ApiLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TroutTrackerApi}/*/*'
+
+  # S3 Bucket for hosting frontend
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'trouttracker-frontend-${AWS::AccountId}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # S3 Bucket Policy - Allow public access
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway Endpoint URL
+    Value: !Sub 'https://${TroutTrackerApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${ProjectName}-ApiEndpoint'
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref TroutStockingTable
+    Export:
+      Name: !Sub '${ProjectName}-TableName'
+
+  FrontendBucketUrl:
+    Description: Frontend S3 Bucket URL
+    Value: !GetAtt FrontendBucket.WebsiteURL
+    Export:
+      Name: !Sub '${ProjectName}-FrontendUrl'
+
+  ScraperFunctionName:
+    Description: Scraper Lambda Function Name
+    Value: !Ref ScraperLambdaFunction
+
+  ApiFunctionName:
+    Description: API Lambda Function Name
+    Value: !Ref ApiLambdaFunction
+

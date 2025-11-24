@@ -1,0 +1,92 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Python dependencies (Lambda layers)
+# These should be installed during deployment, not committed
+backend/api/boto3/
+backend/api/botocore/
+backend/api/dateutil/
+backend/api/jmespath/
+backend/api/s3transfer/
+backend/api/six.py
+backend/api/urllib3/
+backend/api/bin/
+backend/api/*-dist-info/
+
+backend/scraper/boto3/
+backend/scraper/botocore/
+backend/scraper/bs4/
+backend/scraper/beautifulsoup4*/
+backend/scraper/certifi/
+backend/scraper/charset_normalizer/
+backend/scraper/dateutil/
+backend/scraper/greenlet/
+backend/scraper/idna/
+backend/scraper/include/
+backend/scraper/jmespath/
+backend/scraper/lxml/
+backend/scraper/playwright/
+backend/scraper/pyee/
+backend/scraper/python_dateutil*/
+backend/scraper/requests/
+backend/scraper/s3transfer/
+backend/scraper/six.py
+backend/scraper/soupsieve/
+backend/scraper/typing_extensions.py
+backend/scraper/urllib3/
+backend/scraper/bin/
+backend/scraper/*-dist-info/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.production
+.env.development
+
+# API Keys and Secrets
+**/config/secrets.json
+**/config/local.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# AWS
+*.zip
+.aws-sam/
+output.json
+response.json
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# MD
+*.md

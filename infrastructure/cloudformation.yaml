@@ -12,6 +12,17 @@ Parameters:
     Default: TroutTracker
     Description: Project Name
 
+  EnableCloudFront:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable CloudFront distribution for frontend
+
+Conditions:
+  UseCloudFront: !Equals [!Ref EnableCloudFront, 'true']
+
 Resources:
   # DynamoDB Table
   TroutStockingTable:
@@ -262,26 +273,97 @@ Resources:
         IndexDocument: index.html
         ErrorDocument: index.html
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
+        BlockPublicAcls: !If [UseCloudFront, true, false]
+        BlockPublicPolicy: !If [UseCloudFront, true, false]
+        IgnorePublicAcls: !If [UseCloudFront, true, false]
+        RestrictPublicBuckets: !If [UseCloudFront, true, false]
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3600
       Tags:
         - Key: Project
           Value: !Ref ProjectName
 
-  # S3 Bucket Policy - Allow public access
+  # CloudFront Origin Access Identity
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Condition: UseCloudFront
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${ProjectName} Frontend'
+
+  # S3 Bucket Policy - Allow CloudFront or public access
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref FrontendBucket
       PolicyDocument:
         Statement:
-          - Sid: PublicReadGetObject
-            Effect: Allow
-            Principal: '*'
-            Action: s3:GetObject
-            Resource: !Sub '${FrontendBucket.Arn}/*'
+          - !If
+            - UseCloudFront
+            - Sid: AllowCloudFrontOAI
+              Effect: Allow
+              Principal:
+                AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+              Action: s3:GetObject
+              Resource: !Sub '${FrontendBucket.Arn}/*'
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: '*'
+              Action: s3:GetObject
+              Resource: !Sub '${FrontendBucket.Arn}/*'
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: UseCloudFront
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${ProjectName} Frontend Distribution'
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+          MinTTL: 0
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
 
 Outputs:
   ApiEndpoint:
@@ -296,11 +378,36 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-TableName'
 
+  FrontendBucketName:
+    Description: Frontend S3 Bucket Name
+    Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub '${ProjectName}-FrontendBucket'
+
   FrontendBucketUrl:
     Description: Frontend S3 Bucket URL
     Value: !GetAtt FrontendBucket.WebsiteURL
+
+  FrontendUrl:
+    Description: Frontend URL (CloudFront or S3)
+    Value: !If
+      - UseCloudFront
+      - !Sub 'https://${CloudFrontDistribution.DomainName}'
+      - !GetAtt FrontendBucket.WebsiteURL
     Export:
       Name: !Sub '${ProjectName}-FrontendUrl'
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Condition: UseCloudFront
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub '${ProjectName}-CloudFrontDistributionId'
+
+  CloudFrontDomainName:
+    Description: CloudFront Domain Name
+    Condition: UseCloudFront
+    Value: !GetAtt CloudFrontDistribution.DomainName
 
   ScraperFunctionName:
     Description: Scraper Lambda Function Name

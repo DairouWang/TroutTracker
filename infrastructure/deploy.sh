@@ -10,8 +10,10 @@ if [ -z "$REGION" ]; then
     REGION="us-west-2"
 fi
 STACK_NAME="${PROJECT_NAME}-Stack"
+ENABLE_CLOUDFRONT="${ENABLE_CLOUDFRONT:-true}"
 
 echo "Using AWS Region: $REGION"
+echo "CloudFront: $ENABLE_CLOUDFRONT"
 
 echo "=========================================="
 echo "TroutTracker Deployment Script"
@@ -48,6 +50,7 @@ aws cloudformation deploy \
     --parameter-overrides \
         GoogleGeocodingApiKey=$GOOGLE_GEOCODING_API_KEY \
         ProjectName=$PROJECT_NAME \
+        EnableCloudFront=$ENABLE_CLOUDFRONT \
     --capabilities CAPABILITY_NAMED_IAM \
     --region $REGION
 
@@ -117,22 +120,67 @@ npm run build
 # Get S3 bucket name
 BUCKET_NAME=$(aws cloudformation describe-stacks \
     --stack-name $STACK_NAME \
-    --query 'Stacks[0].Outputs[?ExportName==`${PROJECT_NAME}-FrontendUrl`].OutputValue' \
+    --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' \
     --output text \
-    --region $REGION | sed 's|http://||' | sed 's|.s3-website.*||')
+    --region $REGION)
 
-# Upload to S3
-aws s3 sync dist/ s3://${BUCKET_NAME} --delete --region $REGION
+echo "Uploading to S3 bucket: ${BUCKET_NAME}"
+
+# Upload to S3 with optimized cache headers
+echo "Uploading assets with cache headers..."
+aws s3 sync dist/ s3://${BUCKET_NAME} \
+    --delete \
+    --cache-control "public, max-age=31536000, immutable" \
+    --exclude "index.html" \
+    --region $REGION
+
+# Upload index.html with no-cache
+echo "Uploading index.html..."
+aws s3 cp dist/index.html s3://${BUCKET_NAME}/index.html \
+    --cache-control "public, max-age=0, must-revalidate" \
+    --region $REGION
+
+echo "✓ Frontend uploaded to S3"
+
+# Invalidate CloudFront cache if enabled
+if [ "$ENABLE_CLOUDFRONT" = "true" ]; then
+    CLOUDFRONT_ID=$(aws cloudformation describe-stacks \
+        --stack-name $STACK_NAME \
+        --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+        --output text \
+        --region $REGION)
+    
+    if [ ! -z "$CLOUDFRONT_ID" ] && [ "$CLOUDFRONT_ID" != "None" ]; then
+        echo "Invalidating CloudFront cache..."
+        aws cloudfront create-invalidation \
+            --distribution-id $CLOUDFRONT_ID \
+            --paths "/*" \
+            --region $REGION > /dev/null
+        echo "✓ CloudFront cache invalidated"
+    fi
+fi
+
+# Get final URLs
+FRONTEND_URL=$(aws cloudformation describe-stacks \
+    --stack-name $STACK_NAME \
+    --query 'Stacks[0].Outputs[?OutputKey==`FrontendUrl`].OutputValue' \
+    --output text \
+    --region $REGION)
 
 echo ""
 echo "=========================================="
-echo "Deployment Complete!"
+echo "🎉 Deployment Complete!"
 echo "=========================================="
 echo "API Endpoint: ${API_ENDPOINT}"
-echo "Frontend URL: $(aws cloudformation describe-stacks \
-    --stack-name $STACK_NAME \
-    --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketUrl`].OutputValue' \
-    --output text \
-    --region $REGION)"
+echo "Frontend URL: ${FRONTEND_URL}"
+if [ "$ENABLE_CLOUDFRONT" = "true" ]; then
+    echo "CloudFront Distribution: ${CLOUDFRONT_ID}"
+fi
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "1. Visit your frontend URL to test the application"
+echo "2. Trigger the scraper manually to populate data:"
+echo "   aws lambda invoke --function-name ${SCRAPER_FUNCTION_NAME} response.json"
 echo "=========================================="
 

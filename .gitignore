@@ -89,5 +89,12 @@ response.json
 *.tfstate.backup
 .terraform/
 
-# MD
+# CloudFront
+cloudfront-invalidation-*.json
+
+# Temporary files
+*.tmp
+*.bak
+
+#md
 *.md

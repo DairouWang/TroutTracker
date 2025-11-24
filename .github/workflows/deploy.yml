@@ -1,0 +1,225 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-west-2
+  STACK_NAME: TroutTracker-Stack
+
+jobs:
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      api_endpoint: ${{ steps.get-outputs.outputs.api_endpoint }}
+      frontend_bucket: ${{ steps.get-outputs.outputs.frontend_bucket }}
+      cloudfront_id: ${{ steps.get-outputs.outputs.cloudfront_id }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/cloudformation.yaml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --parameter-overrides \
+                GoogleGeocodingApiKey=${{ secrets.GOOGLE_GEOCODING_API_KEY }} \
+                ProjectName=TroutTracker \
+                EnableCloudFront=true \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --no-fail-on-empty-changeset
+
+      - name: Get stack outputs
+        id: get-outputs
+        run: |
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "api_endpoint=$API_ENDPOINT" >> $GITHUB_OUTPUT
+          
+          FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "frontend_bucket=$FRONTEND_BUCKET" >> $GITHUB_OUTPUT
+          
+          CLOUDFRONT_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "cloudfront_id=$CLOUDFRONT_ID" >> $GITHUB_OUTPUT
+
+  deploy-lambda-scraper:
+    name: Deploy Scraper Lambda
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package and deploy Scraper Lambda
+        run: |
+          cd backend/scraper
+          pip install -r requirements.txt -t .
+          zip -r scraper.zip . -x "*.pyc" -x "__pycache__/*" -x "*/tests/*" -x "*/test/*" -x "*.pyx" -x "*.pxi" -q
+          
+          SCRAPER_FUNCTION=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ScraperFunctionName`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          aws lambda update-function-code \
+            --function-name $SCRAPER_FUNCTION \
+            --zip-file fileb://scraper.zip \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Scraper Lambda deployed successfully"
+
+  deploy-lambda-api:
+    name: Deploy API Lambda
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package and deploy API Lambda
+        run: |
+          cd backend/api
+          pip install -r requirements.txt -t .
+          zip -r api.zip . -x "*.pyc" -x "__pycache__/*" -x "*/tests/*" -x "*/test/*" -q
+          
+          API_FUNCTION=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiFunctionName`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          aws lambda update-function-code \
+            --function-name $API_FUNCTION \
+            --zip-file fileb://api.zip \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ API Lambda deployed successfully"
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-lambda-api]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          
+          # Create .env.production
+          cat > .env.production <<EOF
+          VITE_API_ENDPOINT=${{ needs.deploy-infrastructure.outputs.api_endpoint }}
+          VITE_GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
+          EOF
+          
+          npm run build
+
+      - name: Upload to S3
+        run: |
+          aws s3 sync frontend/dist/ s3://${{ needs.deploy-infrastructure.outputs.frontend_bucket }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html" \
+            --region ${{ env.AWS_REGION }}
+          
+          # Upload index.html with different cache settings
+          aws s3 cp frontend/dist/index.html s3://${{ needs.deploy-infrastructure.outputs.frontend_bucket }}/index.html \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Frontend uploaded to S3"
+
+      - name: Invalidate CloudFront cache
+        if: needs.deploy-infrastructure.outputs.cloudfront_id != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.deploy-infrastructure.outputs.cloudfront_id }} \
+            --paths "/*" \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ CloudFront cache invalidated"
+
+      - name: Get deployment URLs
+        run: |
+          FRONTEND_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`FrontendUrl`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          echo "=========================================="
+          echo "🎉 Deployment Complete!"
+          echo "=========================================="
+          echo "Frontend URL: $FRONTEND_URL"
+          echo "API Endpoint: ${{ needs.deploy-infrastructure.outputs.api_endpoint }}"
+          echo "=========================================="
+

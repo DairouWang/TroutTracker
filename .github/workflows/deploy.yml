@@ -30,6 +30,45 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check and cleanup failed stack
+        run: |
+          echo "Checking stack status..."
+          STACK_STATUS=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].StackStatus' \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+          
+          echo "Current stack status: $STACK_STATUS"
+          
+          if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "⚠️  Stack is in ROLLBACK_COMPLETE state, deleting..."
+            aws cloudformation delete-stack \
+              --stack-name ${{ env.STACK_NAME }} \
+              --region ${{ env.AWS_REGION }}
+            
+            echo "Waiting for stack deletion to complete..."
+            aws cloudformation wait stack-delete-complete \
+              --stack-name ${{ env.STACK_NAME }} \
+              --region ${{ env.AWS_REGION }}
+            
+            echo "✅ Stack deleted successfully, ready for fresh deployment"
+          elif [ "$STACK_STATUS" != "NOT_FOUND" ] && [[ "$STACK_STATUS" == *"FAILED"* ]]; then
+            echo "⚠️  Stack is in failed state: $STACK_STATUS"
+            echo "Attempting to delete..."
+            aws cloudformation delete-stack \
+              --stack-name ${{ env.STACK_NAME }} \
+              --region ${{ env.AWS_REGION }}
+            
+            aws cloudformation wait stack-delete-complete \
+              --stack-name ${{ env.STACK_NAME }} \
+              --region ${{ env.AWS_REGION }}
+            
+            echo "✅ Failed stack deleted"
+          else
+            echo "✅ Stack status is OK (${STACK_STATUS}), proceeding with deployment"
+          fi
+
       - name: Deploy CloudFormation stack
         run: |
           aws cloudformation deploy \

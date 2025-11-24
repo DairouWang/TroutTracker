@@ -43,7 +43,8 @@ backend/scraper/soupsieve/
 backend/scraper/typing_extensions.py
 backend/scraper/urllib3/
 backend/scraper/bin/
-backend/scraper/*-dist-info/
+backend/scraper/*.dist-info/
+backend/scraper/*-*.dist-info/
 
 # Build outputs
 dist/

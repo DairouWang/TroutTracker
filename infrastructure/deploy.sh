@@ -54,7 +54,8 @@ aws cloudformation deploy \
 echo "Step 2: Packaging and deploying Scraper Lambda..."
 cd ../backend/scraper
 pip install -r requirements.txt -t .
-zip -r scraper.zip . -x "*.pyc" -x "__pycache__/*"
+echo "Creating zip package (excluding test files)..."
+zip -r scraper.zip . -x "*.pyc" -x "__pycache__/*" -x "*/tests/*" -x "*/test/*" -x "*.pyx" -x "*.pxi" -q
 
 SCRAPER_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --stack-name $STACK_NAME \
@@ -62,10 +63,12 @@ SCRAPER_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --output text \
     --region $REGION)
 
+echo "Uploading Scraper Lambda (this may take a minute)..."
 aws lambda update-function-code \
     --function-name $SCRAPER_FUNCTION_NAME \
     --zip-file fileb://scraper.zip \
-    --region $REGION
+    --region $REGION \
+    --output text > /dev/null 2>&1 && echo "✓ Upload complete"
 
 rm scraper.zip
 echo "Scraper Lambda deployed successfully!"
@@ -73,7 +76,8 @@ echo "Scraper Lambda deployed successfully!"
 echo "Step 3: Packaging and deploying API Lambda..."
 cd ../api
 pip install -r requirements.txt -t .
-zip -r api.zip . -x "*.pyc" -x "__pycache__/*"
+echo "Creating zip package..."
+zip -r api.zip . -x "*.pyc" -x "__pycache__/*" -x "*/tests/*" -x "*/test/*" -q
 
 API_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --stack-name $STACK_NAME \
@@ -81,10 +85,12 @@ API_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --output text \
     --region $REGION)
 
+echo "Uploading API Lambda..."
 aws lambda update-function-code \
     --function-name $API_FUNCTION_NAME \
     --zip-file fileb://api.zip \
-    --region $REGION
+    --region $REGION \
+    --output text > /dev/null 2>&1 && echo "✓ Upload complete"
 
 rm api.zip
 echo "API Lambda deployed successfully!"

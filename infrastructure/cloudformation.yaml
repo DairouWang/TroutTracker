@@ -63,7 +63,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-LambdaExecutionRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -93,7 +92,6 @@ Resources:
   ScraperLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-Scraper'
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -110,12 +108,13 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
+        - Key: Name
+          Value: !Sub '${ProjectName}-Scraper'
 
   # API Lambda Function
   ApiLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-API'
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -131,6 +130,8 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
+        - Key: Name
+          Value: !Sub '${ProjectName}-API'
 
   # CloudWatch Events Rule - Trigger daily at 9:00 AM PST
   ScraperScheduleRule:
@@ -268,7 +269,6 @@ Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'trouttracker-frontend-${AWS::AccountId}'
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: index.html

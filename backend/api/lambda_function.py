@@ -317,6 +317,8 @@ def lambda_handler(event, context):
                 email = body.get('email', '')
                 message = body.get('message', '')
                 to_email = body.get('to', 'trouttrackerinfo@gmail.com')
+                print(f"[Feedback] Payload received: name={name}, email={email}, message_len={len(message)}, to={to_email}")
+                print(f"[Feedback] Using feedback table: {feedback_table_name}")
 
                 if not email or not message:
                     return {
@@ -329,7 +331,9 @@ def lambda_handler(event, context):
                     }
 
                 saved = save_feedback(name, email, message, to_email)
+                print(f"[Feedback] Saved record id: {saved['id']}")
                 result = send_feedback(name, email, message, to_email)
+                print(f"[Feedback] Email sent, SES message id: {result['message_id']}")
 
                 return {
                     'statusCode': 200,

@@ -25,7 +25,7 @@ const mapOptions = {
   fullscreenControl: true,
 }
 
-const Map = ({ plants, selectedPlant, onPlantSelect, loading }) => {
+const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
   const [map, setMap] = useState(null)
   const [activeMarker, setActiveMarker] = useState(null)
   const markersRef = useRef({})
@@ -187,23 +187,39 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading }) => {
         ))}
       </GoogleMap>
 
-      {/* Legend */}
-      <div className="map-legend">
-        <h4 className="legend-title">Legend</h4>
-        <div className="legend-items">
-          <div className="legend-item">
-            <img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Rainbow" />
-            <span>Rainbow Trout</span>
-          </div>
-          <div className="legend-item">
-            <img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Brook" />
-            <span>Brook Trout</span>
-          </div>
-          <div className="legend-item">
-            <img src="http://maps.google.com/mapfiles/ms/icons/orange-dot.png" alt="Brown" />
-            <span>Brown Trout</span>
+      {/* Legend and Species Distribution */}
+      <div className="map-legend-container">
+        <div className="map-legend">
+          <h4 className="legend-title">Legend</h4>
+          <div className="legend-items">
+            <div className="legend-item">
+              <img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Rainbow" />
+              <span>Rainbow Trout</span>
+            </div>
+            <div className="legend-item">
+              <img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Brook" />
+              <span>Brook Trout</span>
+            </div>
+            <div className="legend-item">
+              <img src="http://maps.google.com/mapfiles/ms/icons/orange-dot.png" alt="Brown" />
+              <span>Brown Trout</span>
+            </div>
           </div>
         </div>
+
+        {stats?.species_breakdown && Object.keys(stats.species_breakdown).length > 0 && (
+          <div className="map-species-distribution">
+            <h4 className="legend-title">Species Distribution</h4>
+            <div className="species-list">
+              {Object.entries(stats.species_breakdown).map(([species, count]) => (
+                <div key={species} className="species-item">
+                  <span className="species-name">{species}</span>
+                  <span className="species-count">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

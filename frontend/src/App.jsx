@@ -120,13 +120,14 @@ function App() {
         />
         
         <div className={`main-content ${mobileView === 'map' ? 'mobile-visible' : 'mobile-hidden'}`}>
-          {stats && <StatsPanel stats={stats} />}
+          {stats && <StatsPanel stats={stats} showSpeciesDistribution={false} />}
           
           <Map
             plants={filteredPlants}
             selectedPlant={selectedPlant}
             onPlantSelect={handlePlantSelect}
             loading={loading}
+            stats={stats}
           />
         </div>
       </div>

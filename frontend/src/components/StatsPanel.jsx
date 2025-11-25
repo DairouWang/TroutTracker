@@ -1,7 +1,7 @@
 import React from 'react'
 import './StatsPanel.css'
 
-const StatsPanel = ({ stats }) => {
+const StatsPanel = ({ stats, showSpeciesDistribution = false }) => {
   if (!stats) return null
 
   return (
@@ -30,7 +30,7 @@ const StatsPanel = ({ stats }) => {
         </div>
       </div>
 
-      {stats.species_breakdown && Object.keys(stats.species_breakdown).length > 0 && (
+      {showSpeciesDistribution && stats.species_breakdown && Object.keys(stats.species_breakdown).length > 0 && (
         <div className="stat-card species-card">
           <div className="stat-icon">🎣</div>
           <div className="stat-content">

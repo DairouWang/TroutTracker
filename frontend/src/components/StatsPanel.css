@@ -97,16 +97,33 @@
     padding: 1rem;
     background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
-    flex-direction: column;
+    flex-direction: row;
+    gap: 0.5rem;
   }
-  
+
   .stat-card {
     box-shadow: none;
     border: 1px solid #e5e7eb;
-    width: auto;
-    min-width: auto;
+    flex: 1;
+    min-width: 0;
+    padding: 0.75rem 0.5rem;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
-  
+
+  .stat-icon {
+    font-size: 1.5rem;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.625rem;
+  }
+
   .species-card {
     display: none;
   }

@@ -15,14 +15,19 @@ const Header = () => {
         </div>
         
         <div className="header-right">
-          <a 
-            href="https://wdfw.wa.gov/fishing/reports/stocking/trout-plants"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="header-link"
-          >
-            Data Source: WDFW
-          </a>
+          <div className="header-right-content">
+            <a
+              href="https://wdfw.wa.gov/fishing/reports/stocking/trout-plants"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="header-link"
+            >
+              Data Source: WDFW
+            </a>
+            <p className="header-update-info">
+              Data automatically updates daily at 9:00 AM PST
+            </p>
+          </div>
         </div>
       </div>
     </header>

@@ -50,8 +50,15 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
             response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
             items.extend(response.get('Items', []))
         
-        # Sort by date (newest first)
-        items.sort(key=lambda x: x.get('stock_date', ''), reverse=True)
+        # Sort by date (newest first) - convert date string to datetime for proper sorting
+        def parse_date(date_str):
+            try:
+                return datetime.strptime(date_str, '%b %d, %Y')
+            except:
+                # Return a very old date for invalid dates so they appear at the end
+                return datetime(1900, 1, 1)
+        
+        items.sort(key=lambda x: parse_date(x.get('stock_date', '')), reverse=True)
         
         return items
         
@@ -78,8 +85,14 @@ def get_lake_by_name(lake_name: str) -> Optional[Dict]:
         items = response.get('Items', [])
         
         if items:
-            # Return the most recent record
-            items.sort(key=lambda x: x.get('stock_date', ''), reverse=True)
+            # Return the most recent record - convert date string to datetime for proper sorting
+            def parse_date(date_str):
+                try:
+                    return datetime.strptime(date_str, '%b %d, %Y')
+                except:
+                    return datetime(1900, 1, 1)
+            
+            items.sort(key=lambda x: parse_date(x.get('stock_date', '')), reverse=True)
             return items[0]
         
         return None

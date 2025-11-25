@@ -59,6 +59,22 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # DynamoDB Table - Feedback
+  TroutFeedbackTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-Feedback'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
   # Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -87,6 +103,16 @@ Resources:
                 Resource:
                   - !GetAtt TroutStockingTable.Arn
                   - !Sub '${TroutStockingTable.Arn}/index/*'
+                  - !GetAtt TroutFeedbackTable.Arn
+        - PolicyName: SESSendEmail
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
 
   # Scraper Lambda Function
   ScraperLambdaFunction:
@@ -100,6 +126,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref TroutStockingTable
+          FEEDBACK_TABLE_NAME: !Ref TroutFeedbackTable
           GOOGLE_GEOCODING_API_KEY: !Ref GoogleGeocodingApiKey
       Code:
         ZipFile: |
@@ -172,6 +199,14 @@ Resources:
       ParentId: !GetAtt TroutTrackerApi.RootResourceId
       PathPart: trout
 
+  # API Gateway Resource - /feedback
+  FeedbackResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ParentId: !GetAtt TroutTrackerApi.RootResourceId
+      PathPart: feedback
+
   # API Gateway Resource - /trout/stats
   StatsResource:
     Type: AWS::ApiGateway::Resource
@@ -228,6 +263,54 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
+  # API Gateway Method - POST /feedback
+  FeedbackPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref FeedbackResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Gateway Method - OPTIONS /feedback (CORS)
+  FeedbackOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref FeedbackResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   # API Gateway Method - GET /trout/stats
   StatsGetMethod:
     Type: AWS::ApiGateway::Method
@@ -252,6 +335,8 @@ Resources:
       - TroutGetMethod
       - TroutOptionsMethod
       - StatsGetMethod
+      - FeedbackPostMethod
+      - FeedbackOptionsMethod
     Properties:
       RestApiId: !Ref TroutTrackerApi
       StageName: prod
@@ -416,4 +501,3 @@ Outputs:
   ApiFunctionName:
     Description: API Lambda Function Name
     Value: !Ref ApiLambdaFunction
-

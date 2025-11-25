@@ -62,7 +62,7 @@ const Feedback = () => {
         throw new Error('Failed to send feedback')
       }
 
-      setStatus({ type: 'success', message: 'Thank you for your feedback! We will get back to you soon.' })
+      setStatus({ type: 'success', message: 'Your feedback has been received.' })
       setTimeout(() => {
         handleClose()
       }, 2000)

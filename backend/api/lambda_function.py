@@ -1,6 +1,6 @@
 """
 TroutTracker API Lambda Function
-Provides REST API endpoints to query trout stocking data
+Provides REST API endpoints to query trout stocking data and feedback
 """
 import json
 import os
@@ -8,12 +8,15 @@ import boto3
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional
+from uuid import uuid4
 from boto3.dynamodb.conditions import Key, Attr
 
 # AWS clients
 dynamodb = boto3.resource('dynamodb')
 table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'TroutStockingData')
 table = dynamodb.Table(table_name)
+feedback_table_name = os.environ.get('FEEDBACK_TABLE_NAME')
+feedback_table = dynamodb.Table(feedback_table_name) if feedback_table_name else None
 ses_client = boto3.client('ses', region_name='us-west-1')
 
 
@@ -218,6 +221,28 @@ Message:
         raise
 
 
+def save_feedback(name: str, email: str, message: str, to_email: str) -> Dict:
+    """Persist feedback to DynamoDB for record-keeping."""
+    if not feedback_table:
+        raise Exception('Feedback table is not configured')
+
+    item = {
+        'id': str(uuid4()),
+        'name': name or 'Anonymous',
+        'email': email,
+        'message': message,
+        'to_email': to_email,
+        'created_at': datetime.utcnow().isoformat()
+    }
+
+    try:
+        feedback_table.put_item(Item=item)
+        return item
+    except Exception as e:
+        print(f"Error saving feedback: {str(e)}")
+        raise
+
+
 def lambda_handler(event, context):
     """
     Lambda main function - API Gateway integration
@@ -303,6 +328,7 @@ def lambda_handler(event, context):
                         'body': json.dumps({'message': 'Email and message are required'})
                     }
 
+                saved = save_feedback(name, email, message, to_email)
                 result = send_feedback(name, email, message, to_email)
 
                 return {
@@ -313,7 +339,8 @@ def lambda_handler(event, context):
                     },
                     'body': json.dumps({
                         'message': 'Feedback sent successfully',
-                        'message_id': result['message_id']
+                        'message_id': result['message_id'],
+                        'record_id': saved['id']
                     })
                 }
             except Exception as e:
@@ -365,4 +392,3 @@ if __name__ == "__main__":
     
     result = lambda_handler(test_event, None)
     print(json.dumps(result, indent=2))
-

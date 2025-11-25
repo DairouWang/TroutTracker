@@ -64,12 +64,24 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading }) => {
 
   // Get marker color (based on species)
   const getMarkerIcon = (species) => {
-    const colors = {
-      'Rainbow Trout': 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-      'Eastern Brook Trout': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
-      'Brown Trout': 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
+    if (!species) {
+      return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
     }
-    return colors[species] || 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
+    
+    // Normalize species name for matching (case-insensitive, trim whitespace)
+    const normalizedSpecies = species.toLowerCase().trim()
+    
+    // Use more flexible matching to handle variations in species names
+    if (normalizedSpecies.includes('rainbow')) {
+      return 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+    } else if (normalizedSpecies.includes('brook')) {
+      return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
+    } else if (normalizedSpecies.includes('brown')) {
+      return 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png'
+    }
+    
+    // Default color for unknown species
+    return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
   }
 
   if (loadError) {

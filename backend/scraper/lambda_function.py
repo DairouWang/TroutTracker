@@ -40,13 +40,18 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
         return None
     
     try:
-        # Build search query
-        search_query = f"{lake_name}, {county} County, Washington, USA" if county else f"{lake_name}, Washington, USA"
+        # Build search query - prioritize county, then state
+        search_query = f"{lake_name}, {county} County, Washington State, USA" if county else f"{lake_name}, Washington State, USA"
         
         url = "https://maps.googleapis.com/maps/api/geocode/json"
         params = {
             'address': search_query,
-            'key': GOOGLE_GEOCODING_API_KEY
+            'key': GOOGLE_GEOCODING_API_KEY,
+            # Add bounds to restrict search to Washington State
+            # Washington State approximate bounds: 45.5°N to 49°N, -124.8°W to -116.9°W
+            'bounds': '45.5,-124.8|49.0,-116.9',
+            # Strict bounds to only return results within Washington State
+            'region': 'us'
         }
         
         response = requests.get(url, params=params, timeout=10)
@@ -55,7 +60,22 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
         data = response.json()
         
         if data['status'] == 'OK' and len(data['results']) > 0:
-            location = data['results'][0]['geometry']['location']
+            result = data['results'][0]
+            location = result['geometry']['location']
+            
+            # Verify result is in Washington State
+            address_components = result.get('address_components', [])
+            is_in_washington = False
+            for component in address_components:
+                if 'administrative_area_level_1' in component.get('types', []):
+                    if component.get('short_name') == 'WA' or component.get('long_name') == 'Washington':
+                        is_in_washington = True
+                        break
+            
+            if not is_in_washington:
+                print(f"Geocoding result not in Washington State: {lake_name}")
+                return None
+            
             return {
                 'lat': Decimal(str(location['lat'])),
                 'lng': Decimal(str(location['lng']))

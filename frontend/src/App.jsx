@@ -120,7 +120,42 @@ function App() {
         />
         
         <div className={`main-content ${mobileView === 'map' ? 'mobile-visible' : 'mobile-hidden'}`}>
-          {stats && <StatsPanel stats={stats} showSpeciesDistribution={false} />}
+          {stats && <StatsPanel stats={stats} />}
+          
+          {/* Mobile: Legend and Species Distribution below stats */}
+          <div className="mobile-legend-species">
+            <div className="mobile-legend">
+              <h4 className="legend-title">Legend</h4>
+              <div className="legend-items">
+                <div className="legend-item">
+                  <img src="http://maps.google.com/mapfiles/ms/icons/blue-dot.png" alt="Rainbow" />
+                  <span>Rainbow Trout</span>
+                </div>
+                <div className="legend-item">
+                  <img src="http://maps.google.com/mapfiles/ms/icons/green-dot.png" alt="Brook" />
+                  <span>Brook Trout</span>
+                </div>
+                <div className="legend-item">
+                  <img src="http://maps.google.com/mapfiles/ms/icons/orange-dot.png" alt="Brown" />
+                  <span>Brown Trout</span>
+                </div>
+              </div>
+            </div>
+
+            {stats?.species_breakdown && Object.keys(stats.species_breakdown).length > 0 && (
+              <div className="mobile-species-distribution">
+                <h4 className="legend-title">Species Distribution</h4>
+                <div className="species-list">
+                  {Object.entries(stats.species_breakdown).map(([species, count]) => (
+                    <div key={species} className="species-item">
+                      <span className="species-name">{species}</span>
+                      <span className="species-count">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           
           <Map
             plants={filteredPlants}

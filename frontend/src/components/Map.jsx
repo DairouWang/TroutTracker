@@ -187,7 +187,7 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
         ))}
       </GoogleMap>
 
-      {/* Legend and Species Distribution */}
+      {/* Legend - Desktop only */}
       <div className="map-legend-container">
         <div className="map-legend">
           <h4 className="legend-title">Legend</h4>
@@ -206,20 +206,6 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
             </div>
           </div>
         </div>
-
-        {stats?.species_breakdown && Object.keys(stats.species_breakdown).length > 0 && (
-          <div className="map-species-distribution">
-            <h4 className="legend-title">Species Distribution</h4>
-            <div className="species-list">
-              {Object.entries(stats.species_breakdown).map(([species, count]) => (
-                <div key={species} className="species-item">
-                  <span className="species-name">{species}</span>
-                  <span className="species-count">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

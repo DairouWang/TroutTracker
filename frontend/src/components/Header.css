@@ -16,6 +16,8 @@
 .header-left {
   display: flex;
   flex-direction: column;
+  text-align: left;
+  align-items: flex-start;
 }
 
 .header-title {
@@ -36,7 +38,9 @@
 .header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 1rem;
+  text-align: right;
 }
 
 .header-link {

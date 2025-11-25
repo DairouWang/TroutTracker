@@ -54,6 +54,73 @@
   height: 1.25rem;
 }
 
+/* Mobile: Legend and Species Distribution */
+.mobile-legend-species {
+  display: none;
+}
+
+.mobile-legend,
+.mobile-species-distribution {
+  background: white;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-legend .legend-title,
+.mobile-species-distribution .legend-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.5rem 0;
+}
+
+.mobile-legend .legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.mobile-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  color: #374151;
+}
+
+.mobile-legend .legend-item img {
+  width: 14px;
+  height: 14px;
+}
+
+.mobile-species-distribution .species-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.mobile-species-distribution .species-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.625rem;
+}
+
+.mobile-species-distribution .species-name {
+  color: #374151;
+  font-weight: 500;
+}
+
+.mobile-species-distribution .species-count {
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.5rem;
+  font-weight: 600;
+}
+
 /* Responsive design - Mobile */
 @media (max-width: 768px) {
   .mobile-view-toggle {
@@ -71,6 +138,21 @@
 
   .mobile-visible {
     display: flex !important;
+  }
+
+  /* Show mobile legend and species distribution */
+  .mobile-legend-species {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .mobile-legend,
+  .mobile-species-distribution {
+    flex: 1;
+    padding: 0.75rem;
   }
 }
 

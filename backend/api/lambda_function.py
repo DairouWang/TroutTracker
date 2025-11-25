@@ -17,7 +17,8 @@ table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'TroutStockingData')
 table = dynamodb.Table(table_name)
 feedback_table_name = os.environ.get('FEEDBACK_TABLE_NAME')
 feedback_table = dynamodb.Table(feedback_table_name) if feedback_table_name else None
-ses_client = boto3.client('ses', region_name='us-west-1')
+ses_region = os.environ.get('SES_REGION', os.environ.get('AWS_REGION', 'us-west-2'))
+ses_client = boto3.client('ses', region_name=ses_region)
 
 
 class DecimalEncoder(json.JSONEncoder):

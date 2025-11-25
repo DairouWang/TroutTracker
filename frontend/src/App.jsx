@@ -3,6 +3,7 @@ import Map from './components/Map'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import StatsPanel from './components/StatsPanel'
+import Feedback from './components/Feedback'
 import { getTroutPlants, getStatistics } from './services/api'
 import './App.css'
 
@@ -166,6 +167,9 @@ function App() {
           />
         </div>
       </div>
+
+      {/* Feedback button */}
+      <Feedback />
     </div>
   )
 }

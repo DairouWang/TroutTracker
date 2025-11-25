@@ -10,10 +10,11 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from boto3.dynamodb.conditions import Key, Attr
 
-# AWS client
+# AWS clients
 dynamodb = boto3.resource('dynamodb')
 table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'TroutStockingData')
 table = dynamodb.Table(table_name)
+ses_client = boto3.client('ses', region_name='us-west-1')
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -105,30 +106,30 @@ def get_lake_by_name(lake_name: str) -> Optional[Dict]:
 def get_statistics() -> Dict:
     """
     Get statistics
-    
+
     Returns:
         Dictionary of statistics
     """
     try:
         response = table.scan()
         items = response.get('Items', [])
-        
+
         # Handle pagination
         while 'LastEvaluatedKey' in response:
             response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
             items.extend(response.get('Items', []))
-        
+
         # Calculate statistics
         total_records = len(items)
         unique_lakes = len(set(item['lake_name'] for item in items))
         species_count = {}
         total_fish = 0
-        
+
         for item in items:
             species = item.get('species', 'Unknown')
             species_count[species] = species_count.get(species, 0) + 1
             total_fish += item.get('number', 0)
-        
+
         return {
             'total_records': total_records,
             'unique_lakes': unique_lakes,
@@ -136,9 +137,84 @@ def get_statistics() -> Dict:
             'species_breakdown': species_count,
             'last_updated': datetime.now().isoformat()
         }
-        
+
     except Exception as e:
         print(f"Error getting statistics: {str(e)}")
+        raise
+
+
+def send_feedback(name: str, email: str, message: str, to_email: str) -> Dict:
+    """
+    Send feedback email using AWS SES
+
+    Args:
+        name: Sender name
+        email: Sender email
+        message: Feedback message
+        to_email: Recipient email address
+
+    Returns:
+        Dictionary with send status
+    """
+    try:
+        subject = f"TroutTracker Feedback from {name or 'Anonymous'}"
+        body_text = f"""
+TroutTracker Feedback
+
+From: {name or 'Not provided'}
+Email: {email}
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Message:
+{message}
+"""
+
+        body_html = f"""
+<html>
+<head></head>
+<body>
+  <h2>TroutTracker Feedback</h2>
+  <p><strong>From:</strong> {name or 'Not provided'}</p>
+  <p><strong>Email:</strong> {email}</p>
+  <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+  <hr>
+  <p><strong>Message:</strong></p>
+  <p>{message.replace(chr(10), '<br>')}</p>
+</body>
+</html>
+"""
+
+        response = ses_client.send_email(
+            Source=to_email,  # Must be verified in SES
+            Destination={
+                'ToAddresses': [to_email]
+            },
+            Message={
+                'Subject': {
+                    'Data': subject,
+                    'Charset': 'UTF-8'
+                },
+                'Body': {
+                    'Text': {
+                        'Data': body_text,
+                        'Charset': 'UTF-8'
+                    },
+                    'Html': {
+                        'Data': body_html,
+                        'Charset': 'UTF-8'
+                    }
+                }
+            },
+            ReplyToAddresses=[email] if email else []
+        )
+
+        return {
+            'success': True,
+            'message_id': response['MessageId']
+        }
+
+    except Exception as e:
+        print(f"Error sending feedback: {str(e)}")
         raise
 
 
@@ -198,7 +274,7 @@ def lambda_handler(event, context):
         elif path == '/trout/stats' and http_method == 'GET':
             # Get statistics
             stats = get_statistics()
-            
+
             return {
                 'statusCode': 200,
                 'headers': {
@@ -207,7 +283,50 @@ def lambda_handler(event, context):
                 },
                 'body': json.dumps(stats, cls=DecimalEncoder)
             }
-        
+
+        elif path == '/feedback' and http_method == 'POST':
+            # Send feedback
+            try:
+                body = json.loads(event.get('body', '{}'))
+                name = body.get('name', '')
+                email = body.get('email', '')
+                message = body.get('message', '')
+                to_email = body.get('to', 'trouttrackerinfo@gmail.com')
+
+                if not email or not message:
+                    return {
+                        'statusCode': 400,
+                        'headers': {
+                            'Access-Control-Allow-Origin': '*',
+                            'Content-Type': 'application/json'
+                        },
+                        'body': json.dumps({'message': 'Email and message are required'})
+                    }
+
+                result = send_feedback(name, email, message, to_email)
+
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json'
+                    },
+                    'body': json.dumps({
+                        'message': 'Feedback sent successfully',
+                        'message_id': result['message_id']
+                    })
+                }
+            except Exception as e:
+                print(f"Feedback error: {str(e)}")
+                return {
+                    'statusCode': 500,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json'
+                    },
+                    'body': json.dumps({'message': f'Failed to send feedback: {str(e)}'})
+                }
+
         else:
             return {
                 'statusCode': 404,

@@ -22,9 +22,9 @@
 /* Mobile view toggle button */
 .mobile-view-toggle {
   display: none;
-  position: fixed;
+  position: absolute;
   top: 1rem;
-  right: 1rem;
+  left: 1rem;
   z-index: 1000;
   background: #0284c7;
   color: white;

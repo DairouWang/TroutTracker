@@ -59,5 +59,22 @@ export const getLakeByName = async (lakeName) => {
   }
 }
 
-export default api
+/**
+ * Send user feedback to the backend
+ * @param {Object} payload - Feedback data
+ * @param {string} payload.name - Sender name
+ * @param {string} payload.email - Sender email
+ * @param {string} payload.message - Feedback content
+ * @returns {Promise<Object>} API response payload
+ */
+export const sendFeedback = async (payload) => {
+  try {
+    const response = await api.post('/feedback', payload)
+    return response.data
+  } catch (error) {
+    console.error('Error sending feedback:', error)
+    throw error
+  }
+}
 
+export default api

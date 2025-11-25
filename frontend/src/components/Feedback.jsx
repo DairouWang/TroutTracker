@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { sendFeedback } from '../services/api'
 import './Feedback.css'
 
 const Feedback = () => {
@@ -39,40 +40,19 @@ const Feedback = () => {
     setStatus({ type: '', message: '' })
 
     try {
-      // Using EmailJS or similar service for client-side email sending
-      // For now, we'll use a simple mailto link as fallback
-      const subject = `TroutTracker Feedback from ${formData.name || 'Anonymous'}`
-      const body = `Name: ${formData.name || 'Not provided'}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`
-
-      // Send email using backend API (we'll need to implement this)
-      const response = await fetch(`${import.meta.env.VITE_API_ENDPOINT}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          message: formData.message,
-          to: 'trouttrackerinfo@gmail.com'
-        })
+      await sendFeedback({
+        name: formData.name,
+        email: formData.email,
+        message: formData.message,
+        to: 'trouttrackerinfo@gmail.com'
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to send feedback')
-      }
-
       setStatus({ type: 'success', message: 'Your feedback has been received.' })
       setTimeout(() => {
         handleClose()
       }, 2000)
     } catch (error) {
       console.error('Error sending feedback:', error)
-      // Fallback to mailto link
-      const subject = encodeURIComponent(`TroutTracker Feedback from ${formData.name || 'Anonymous'}`)
-      const body = encodeURIComponent(`Name: ${formData.name || 'Not provided'}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`)
-      window.location.href = `mailto:trouttrackerinfo@gmail.com?subject=${subject}&body=${body}`
-      setStatus({ type: 'info', message: 'Opening your email client...' })
+      setStatus({ type: 'error', message: 'Failed to send feedback. Please try again later.' })
     } finally {
       setIsSubmitting(false)
     }

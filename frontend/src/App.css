@@ -23,8 +23,8 @@
 .mobile-view-toggle {
   display: none;
   position: fixed;
-  bottom: 2rem;
-  right: 1.5rem;
+  top: 1rem;
+  right: 1rem;
   z-index: 1000;
   background: #0284c7;
   color: white;

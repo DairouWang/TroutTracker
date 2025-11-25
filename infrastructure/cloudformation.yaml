@@ -150,6 +150,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref TroutStockingTable
+          FEEDBACK_TABLE_NAME: !Ref TroutFeedbackTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):

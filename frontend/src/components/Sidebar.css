@@ -30,7 +30,7 @@
   border-radius: 9999px;
 }
 
-/* 过滤器 */
+/* Filters */
 .filters {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #e5e7eb;
@@ -70,7 +70,7 @@
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
 }
 
-/* 放养列表 */
+/* Plants list */
 .plants-list {
   flex: 1;
   overflow-y: auto;
@@ -145,7 +145,7 @@
   font-weight: 500;
 }
 
-/* 加载状态 */
+/* Loading state */
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -171,7 +171,7 @@
   }
 }
 
-/* 错误状态 */
+/* Error state */
 .error-state {
   padding: 1rem 1.5rem;
   background: #fef2f2;
@@ -186,7 +186,7 @@
   font-size: 0.875rem;
 }
 
-/* 空状态 */
+/* Empty state */
 .empty-state {
   padding: 3rem 1.5rem;
   text-align: center;
@@ -197,7 +197,7 @@
   margin: 0;
 }
 
-/* 响应式设计 */
+/* Responsive design */
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;

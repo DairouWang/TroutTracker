@@ -164,7 +164,7 @@ Resources:
         Types:
           - REGIONAL
 
-  # API Gateway 资源 - /trout
+  # API Gateway Resource - /trout
   TroutResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -172,7 +172,7 @@ Resources:
       ParentId: !GetAtt TroutTrackerApi.RootResourceId
       PathPart: trout
 
-  # API Gateway 资源 - /trout/stats
+  # API Gateway Resource - /trout/stats
   StatsResource:
     Type: AWS::ApiGateway::Resource
     Properties:

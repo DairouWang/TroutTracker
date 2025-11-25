@@ -11,12 +11,12 @@ const api = axios.create({
 })
 
 /**
- * 获取鳟鱼放养数据
- * @param {Object} params - 查询参数
- * @param {string} params.state - 州代码（默认 'WA'）
- * @param {number} params.days - 获取最近 N 天的数据（默认 30）
- * @param {string} params.lake - 湖泊名称（可选）
- * @returns {Promise<Array>} 放养数据数组
+ * Get trout stocking data
+ * @param {Object} params - Query parameters
+ * @param {string} params.state - State code (default 'WA')
+ * @param {number} params.days - Get data from last N days (default 30)
+ * @param {string} params.lake - Lake name (optional)
+ * @returns {Promise<Array>} Array of stocking data
  */
 export const getTroutPlants = async (params = {}) => {
   try {
@@ -29,8 +29,8 @@ export const getTroutPlants = async (params = {}) => {
 }
 
 /**
- * 获取统计信息
- * @returns {Promise<Object>} 统计数据
+ * Get statistics
+ * @returns {Promise<Object>} Statistics data
  */
 export const getStatistics = async () => {
   try {
@@ -43,9 +43,9 @@ export const getStatistics = async () => {
 }
 
 /**
- * 根据湖泊名称查询
- * @param {string} lakeName - 湖泊名称
- * @returns {Promise<Object>} 湖泊数据
+ * Query by lake name
+ * @param {string} lakeName - Lake name
+ * @returns {Promise<Object>} Lake data
  */
 export const getLakeByName = async (lakeName) => {
   try {

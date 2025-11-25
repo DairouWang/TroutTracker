@@ -39,7 +39,7 @@
   z-index: 1000;
 }
 
-/* InfoWindow 样式 */
+/* InfoWindow styles */
 .info-window {
   min-width: 250px;
   padding: 0.5rem;
@@ -79,7 +79,7 @@
   text-align: right;
 }
 
-/* 地图图例 */
+/* Map legend */
 .map-legend {
   position: absolute;
   bottom: 2rem;
@@ -117,7 +117,7 @@
   height: 20px;
 }
 
-/* 响应式设计 */
+/* Responsive design */
 @media (max-width: 768px) {
   .map-legend {
     bottom: 1rem;

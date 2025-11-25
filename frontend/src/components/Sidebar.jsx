@@ -9,7 +9,8 @@ const Sidebar = ({
   filters, 
   onFilterChange, 
   loading, 
-  error 
+  error,
+  className = ''
 }) => {
   // Get all unique species
   const uniqueSpecies = [...new Set(plants.map(p => p.species))].filter(Boolean)
@@ -28,7 +29,7 @@ const Sidebar = ({
 
   const formatDate = (dateStr) => {
     try {
-      // WDFW 日期格式: "Nov 20, 2025"
+      // WDFW date format: "Nov 20, 2025"
       const date = new Date(dateStr)
       return format(date, 'yyyy-MM-dd')
     } catch {
@@ -37,7 +38,7 @@ const Sidebar = ({
   }
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${className}`}>
       <div className="sidebar-header">
         <h2 className="sidebar-title">Stocking Records</h2>
         <span className="plant-count">{plants.length} records</span>

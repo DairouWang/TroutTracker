@@ -92,6 +92,14 @@ response.json
 # CloudFront
 cloudfront-invalidation-*.json
 
+# Domain setup (local only)
+infrastructure/setup-domain.sh
+infrastructure/dns-validation-records.json
+infrastructure/domain-config.json
+infrastructure/godaddy-dns-config.txt
+infrastructure/cf-config-*.json
+infrastructure/update-cloudfront-domain.sh
+
 # Temporary files
 *.tmp
 *.bak

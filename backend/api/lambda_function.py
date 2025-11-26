@@ -44,7 +44,7 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
         # Calculate date range (date-only to avoid partial-day offsets)
         safe_days = max(1, days)
         end_date = datetime.now().date()
-        start_date = end_date - timedelta(days=safe_days - 1)
+        start_date = end_date - timedelta(days=safe_days)
 
         # Scan table (in production, should use GSI for more efficient queries)
         response = table.scan()

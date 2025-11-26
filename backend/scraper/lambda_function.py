@@ -10,7 +10,7 @@ import boto3
 import requests
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import time
 
 # AWS client
@@ -26,6 +26,19 @@ ACCESS_POINT_MAX_DISTANCE_METERS = int(os.environ.get('ACCESS_POINT_MAX_DISTANCE
 ACCESS_POINT_KEYWORDS = [
     'boat', 'launch', 'ramp', 'access', 'landing', 'marina', 'dock', 'parking', 'fishing'
 ]
+ACCESS_POINT_MIN_REVIEWS = int(os.environ.get('ACCESS_POINT_MIN_REVIEWS', '1'))
+
+ALLOWED_ACCESS_TYPES = {
+    'boat_ramp',
+    'boat_launch',
+    'marina',
+    'parking',
+    'rv_park',
+    'campground',
+    'park',
+    'tourist_attraction',
+    'point_of_interest'
+}
 
 DISALLOWED_PLACE_TYPES = {
     'route',
@@ -55,6 +68,37 @@ ABBREVIATION_REPLACEMENTS = [
     (r'\bSt\b', 'Saint'),
     (r'\bCtr\b', 'Center')
 ]
+
+
+def normalize_county_name(name: str) -> str:
+    if not name:
+        return ''
+    normalized = name.lower()
+    normalized = normalized.replace('county', '')
+    normalized = re.sub(r'[^a-z]', '', normalized)
+    return normalized
+
+
+def components_match_county(address_components: List[Dict], county: str) -> bool:
+    target = normalize_county_name(county)
+    if not target:
+        return True
+
+    for component in address_components or []:
+        if 'administrative_area_level_2' in component.get('types', []):
+            value = component.get('long_name') or component.get('short_name') or ''
+            if normalize_county_name(value) == target:
+                return True
+
+    return False
+
+
+def address_matches_county(address: str, county: str) -> bool:
+    target = normalize_county_name(county)
+    if not target:
+        return True
+    normalized = normalize_county_name(address or '')
+    return target in normalized
 
 
 def expand_lake_name(name: str) -> str:
@@ -98,6 +142,52 @@ def build_lake_name_variants(name: str) -> List[str]:
         deduped.append(normalized)
 
     return deduped or [name]
+
+
+def _places_nearby(location: Tuple[float, float], keyword: str, radius: int) -> List[Dict]:
+    if not GOOGLE_PLACES_API_KEY:
+        return []
+
+    params = {
+        'location': f"{location[0]},{location[1]}",
+        'keyword': keyword,
+        'radius': radius,
+        'key': GOOGLE_PLACES_API_KEY
+    }
+
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('results', [])
+    except Exception as e:
+        print(f"Places nearby error ({keyword}): {str(e)}")
+        return []
+
+
+def _places_text_search(query: str, place_type: Optional[str] = None) -> List[Dict]:
+    if not GOOGLE_PLACES_API_KEY:
+        return []
+
+    params = {
+        'query': query,
+        'key': GOOGLE_PLACES_API_KEY,
+        'region': 'us'
+    }
+    if place_type:
+        params['type'] = place_type
+
+    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('results', [])
+    except Exception as e:
+        print(f"Places text search error ({query}): {str(e)}")
+        return []
 
 
 def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
@@ -152,6 +242,9 @@ def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
 
             location = result.get('geometry', {}).get('location')
             if not location:
+                continue
+
+            if county and not address_matches_county(result.get('formatted_address', ''), county):
                 continue
 
             return {
@@ -229,6 +322,10 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
                     print(f"Geocoding result not in Washington State: {variant}")
                     continue
 
+                if county and not components_match_county(address_components, county):
+                    print(f"Geocoding county mismatch for {variant}: expected {county}")
+                    continue
+
                 return {
                     'lat': Decimal(str(location['lat'])),
                     'lng': Decimal(str(location['lng'])),
@@ -259,8 +356,106 @@ def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) ->
     return radius * c
 
 
+def _build_candidate_from_result(
+    result: Dict,
+    lake_lat: float,
+    lake_lng: float,
+    required_terms: Optional[List[str]],
+    require_reviews: bool,
+    query_label: str,
+    county: str,
+    stage_label: str
+) -> Optional[Dict]:
+    location = result.get('geometry', {}).get('location')
+    if not location:
+        return None
+
+    candidate_lat = location.get('lat')
+    candidate_lng = location.get('lng')
+    if candidate_lat is None or candidate_lng is None:
+        return None
+
+    distance = _haversine_distance_m(lake_lat, lake_lng, candidate_lat, candidate_lng)
+    if distance > ACCESS_POINT_MAX_DISTANCE_METERS:
+        return None
+
+    types = set(result.get('types', []))
+    name = (result.get('name') or '').lower()
+
+    if types & DISALLOWED_PLACE_TYPES:
+        return None
+
+    if any(regex.search(name) for regex in DISALLOWED_NAME_REGEXES):
+        return None
+
+    address_text = result.get('vicinity') or result.get('formatted_address', '')
+    if county and address_text and not address_matches_county(address_text, county):
+        return None
+
+    reviews = result.get('user_ratings_total', 0) or 0
+    rating = float(result.get('rating') or 0)
+    if require_reviews and (reviews < ACCESS_POINT_MIN_REVIEWS or rating <= 0):
+        return None
+
+    type_match = bool(ALLOWED_ACCESS_TYPES & types)
+    keyword_match = any(keyword in name for keyword in ACCESS_POINT_KEYWORDS)
+
+    required_match = True
+    if required_terms:
+        required_terms_lower = [term.lower() for term in required_terms]
+        type_str = ' '.join(t.lower() for t in types)
+        required_match = any(term in name for term in required_terms_lower) or any(term in type_str for term in required_terms_lower)
+
+    if required_terms and not required_match:
+        return None
+
+    if not (type_match or keyword_match):
+        return None
+
+    candidate = {
+        'lat': Decimal(str(candidate_lat)),
+        'lng': Decimal(str(candidate_lng)),
+        'source': 'access_point',
+        'access_point_type': stage_label,
+        'place_id': result.get('place_id'),
+        'place_name': result.get('name'),
+        'vicinity': address_text,
+        'distance_m': round(distance, 1),
+        'search_query': query_label,
+        'rating': rating,
+        'user_ratings_total': reviews,
+        'place_types': list(types)
+    }
+
+    return candidate
+
+
+def _select_best_candidate(results: List[Dict], **kwargs) -> Optional[Dict]:
+    best_candidate = None
+    best_score = float('-inf')
+
+    for result in results:
+        candidate = _build_candidate_from_result(result, **kwargs)
+        if not candidate:
+            continue
+
+        score = 0.0
+        score += candidate.get('rating', 0) * 2
+        score += min(candidate.get('user_ratings_total', 0) / 10.0, 5)
+        score -= candidate['distance_m'] / 400.0
+
+        if kwargs.get('required_terms'):
+            score += 1.5
+
+        if score > best_score:
+            best_score = score
+            best_candidate = candidate
+
+    return best_candidate
+
+
 def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Optional[Dict]) -> Optional[Dict]:
-    """Use Google Places to find the best parking/boat launch near the lake."""
+    """Find an access point by prioritizing fishing piers, then boat launches, with review requirements."""
     if not lake_coordinates or not GOOGLE_PLACES_API_KEY:
         return None
 
@@ -272,129 +467,82 @@ def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Option
 
     name_variants = build_lake_name_variants(lake_name)
 
-    search_queries = []
-    for variant in name_variants:
-        search_queries.extend([
-            f"{variant} boat launch",
-            f"{variant} boat ramp",
-            f"{variant} boat launch parking",
-            f"{variant} fishing access"
-        ])
+    stage_definitions = [
+        {
+            'mode': 'text',
+            'suffixes': ['fishing pier', 'fishing dock'],
+            'required_terms': ['pier', 'dock'],
+            'label': 'fishing_pier'
+        },
+        {
+            'mode': 'text',
+            'suffixes': ['boat launch', 'boat ramp'],
+            'required_terms': ['launch', 'ramp'],
+            'label': 'boat_launch'
+        },
+        {
+            'mode': 'nearby',
+            'keywords': ['fishing pier', 'fishing dock', f"{lake_name} fishing pier"],
+            'required_terms': ['pier', 'dock'],
+            'radius': min(ACCESS_POINT_SEARCH_RADIUS_METERS, 4000),
+            'label': 'fishing_pier'
+        },
+        {
+            'mode': 'nearby',
+            'keywords': ['boat launch', 'boat ramp', f"{lake_name} boat launch"],
+            'required_terms': ['launch', 'ramp'],
+            'radius': ACCESS_POINT_SEARCH_RADIUS_METERS,
+            'label': 'boat_launch'
+        },
+        {
+            'mode': 'nearby',
+            'keywords': ['fishing access', 'lake parking'],
+            'required_terms': None,
+            'radius': ACCESS_POINT_SEARCH_RADIUS_METERS,
+            'label': 'general_access'
+        }
+    ]
 
-    if county:
-        search_queries.insert(0, f"{name_variants[0]} {county} County boat launch")
-        search_queries.insert(1, f"{county} County boat launch")
+    # Stage 1/2: Text search for specific piers/launches that include reviews
+    for stage in stage_definitions:
+        if stage['mode'] == 'text':
+            for variant in name_variants:
+                for suffix in stage['suffixes']:
+                    query = f"{variant} {suffix}".strip()
+                    results = _places_text_search(query, place_type=None)
+                    candidate = _select_best_candidate(
+                        results,
+                        lake_lat=lake_lat,
+                        lake_lng=lake_lng,
+                        required_terms=stage.get('required_terms'),
+                        require_reviews=True,
+                        query_label=query,
+                        county=county,
+                        stage_label=stage['label']
+                    )
+                    if candidate:
+                        return candidate
 
-    # Generic backup queries
-    search_queries.extend([
-        "boat launch",
-        "boat ramp",
-        "fishing access",
-        "lake parking"
-    ])
-
-    allowed_types = {
-        'boat_ramp',
-        'boat_launch',
-        'marina',
-        'parking',
-        'rv_park',
-        'campground',
-        'park'
-    }
-
-    best_candidate = None
-    best_score = float('-inf')
-
-    base_params = {
-        'location': f"{lake_lat},{lake_lng}",
-        'radius': ACCESS_POINT_SEARCH_RADIUS_METERS,
-        'region': 'us',
-        'key': GOOGLE_PLACES_API_KEY
-    }
-
-    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-
-    for query in search_queries:
-        params = {**base_params, 'keyword': query}
-
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-        except Exception as request_error:
-            print(f"Places API error for {lake_name} ({query}): {request_error}")
+    # Stage 3+: Nearby searches anchored at the lake center
+    for stage in stage_definitions:
+        if stage['mode'] != 'nearby':
             continue
 
-        results = data.get('results', [])
-        for result in results:
-            location = result.get('geometry', {}).get('location')
-            if not location:
-                continue
-
-            candidate_lat = location.get('lat')
-            candidate_lng = location.get('lng')
-            if candidate_lat is None or candidate_lng is None:
-                continue
-
-            distance = _haversine_distance_m(lake_lat, lake_lng, candidate_lat, candidate_lng)
-            if distance > ACCESS_POINT_MAX_DISTANCE_METERS:
-                continue
-
-            types = set(result.get('types', []))
-            name = (result.get('name') or '').lower()
-
-            if types & DISALLOWED_PLACE_TYPES:
-                continue
-
-            if any(regex.search(name) for regex in DISALLOWED_NAME_REGEXES):
-                continue
-
-            type_match = bool(allowed_types & types)
-            keyword_match = any(keyword in name for keyword in ACCESS_POINT_KEYWORDS)
-            if not (type_match or keyword_match):
-                continue
-
-            score = 0.0
-            if {'boat_ramp', 'boat_launch'} & types:
-                score += 8
-            if 'parking' in types:
-                score += 4
-            if 'rv_park' in types:
-                score += 1
-            if any(keyword in name for keyword in ['launch', 'ramp', 'boat']) and 'parking' in name:
-                score += 3
-            elif any(keyword in name for keyword in ['launch', 'ramp', 'boat']):
-                score += 2
-            elif 'parking' in name:
-                score += 1
-
-            # Prefer closer candidates; subtract 1 point every 750m
-            score -= distance / 750.0
-
-            # Slight boost if query contains the lake name (first three queries)
-            if lake_name.lower() in query.lower():
-                score += 1
-
-            if score > best_score:
-                best_score = score
-                best_candidate = {
-                    'lat': Decimal(str(candidate_lat)),
-                    'lng': Decimal(str(candidate_lng)),
-                    'source': 'access_point',
-                    'place_id': result.get('place_id'),
-                    'place_name': result.get('name'),
-                    'vicinity': result.get('vicinity'),
-                    'distance_m': round(distance, 1),
-                    'search_query': query
-                }
-
-        # If we already found a very strong candidate, stop searching
-        if best_score >= 6:
-            break
-
-    if best_candidate:
-        return best_candidate
+        radius = stage.get('radius', ACCESS_POINT_SEARCH_RADIUS_METERS)
+        for keyword in stage['keywords']:
+            results = _places_nearby((lake_lat, lake_lng), keyword, radius)
+            candidate = _select_best_candidate(
+                results,
+                lake_lat=lake_lat,
+                lake_lng=lake_lng,
+                required_terms=stage.get('required_terms'),
+                require_reviews=True,
+                query_label=keyword,
+                county=county,
+                stage_label=stage['label']
+            )
+            if candidate:
+                return candidate
 
     return None
 

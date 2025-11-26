@@ -99,6 +99,72 @@ def build_lake_name_variants(name: str) -> List[str]:
 
     return deduped or [name]
 
+
+def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
+    """Use Google Places Text Search to locate the actual lake feature."""
+    if not GOOGLE_PLACES_API_KEY:
+        return None
+
+    name_variants = build_lake_name_variants(lake_name)
+    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+    type_preferences = [
+        'natural_feature',
+        'park',
+        'point_of_interest'
+    ]
+
+    for variant in name_variants:
+        query = f"{variant}, {county} County, Washington State, USA" if county else f"{variant}, Washington State, USA"
+        params = {
+            'query': query,
+            'key': GOOGLE_PLACES_API_KEY,
+            'type': 'natural_feature'
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            print(f"Places text search error for {variant}: {str(e)}")
+            continue
+
+        results = data.get('results', [])
+        for result in results:
+            types = result.get('types', [])
+            name = result.get('name', '')
+            if not types:
+                continue
+
+            type_rank = None
+            for t in types:
+                if t in type_preferences:
+                    rank = type_preferences.index(t)
+                    if type_rank is None or rank < type_rank:
+                        type_rank = rank
+
+            if type_rank is None and 'natural_feature' not in types and 'park' not in types:
+                continue
+
+            name_lower = name.lower()
+            if 'lake' not in name_lower and 'reservoir' not in name_lower and 'pond' not in name_lower:
+                continue
+
+            location = result.get('geometry', {}).get('location')
+            if not location:
+                continue
+
+            return {
+                'lat': Decimal(str(location['lat'])),
+                'lng': Decimal(str(location['lng'])),
+                'source': 'lake_place',
+                'place_id': result.get('place_id'),
+                'place_name': name,
+                'vicinity': result.get('formatted_address')
+            }
+
+    return None
+
 # WDFW API endpoint (actual API discovered from network requests)
 # Note: WDFW website uses dynamic loading, data comes from backend API
 WDFW_API_URL = "https://wdfw.wa.gov/fishing/reports/stocking/trout-plants"
@@ -118,6 +184,10 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
     if not GOOGLE_GEOCODING_API_KEY:
         print("Warning: Google Geocoding API Key not set")
         return None
+
+    lake_place = find_lake_place(lake_name, county)
+    if lake_place:
+        return lake_place
 
     name_variants = build_lake_name_variants(lake_name)
 

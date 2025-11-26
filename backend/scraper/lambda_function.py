@@ -208,17 +208,25 @@ def _to_decimal(value) -> Optional[Decimal]:
 
 
 def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
-    """Use Google Places Text Search to locate the actual lake feature."""
+    """
+    Use Google Places Text Search to locate the actual lake feature.
+    Prioritizes places with reviews and good ratings to ensure accurate location.
+    """
     if not GOOGLE_PLACES_API_KEY:
         return None
 
     name_variants = build_lake_name_variants(lake_name)
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+    
+    # Prioritize park type (often has reviews) over natural_feature
     type_preferences = [
-        'natural_feature',
         'park',
+        'natural_feature',
         'point_of_interest'
     ]
+
+    best_candidate = None
+    best_score = -1
 
     for variant in name_variants:
         query = f"{variant}, {county} County, Washington State, USA" if county else f"{variant}, Washington State, USA"
@@ -237,12 +245,15 @@ def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
             continue
 
         results = data.get('results', [])
+        print(f"Found {len(results)} results for '{variant}'")
+        
         for result in results:
             types = result.get('types', [])
             name = result.get('name', '')
             if not types:
                 continue
 
+            # Check if result has required types
             type_rank = None
             for t in types:
                 if t in type_preferences:
@@ -253,6 +264,7 @@ def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
             if type_rank is None and 'natural_feature' not in types and 'park' not in types:
                 continue
 
+            # Ensure name contains lake/reservoir/pond
             name_lower = name.lower()
             if 'lake' not in name_lower and 'reservoir' not in name_lower and 'pond' not in name_lower:
                 continue
@@ -261,19 +273,59 @@ def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
             if not location:
                 continue
 
+            # Verify county match
             if county and not address_matches_county(result.get('formatted_address', ''), county):
+                print(f"County mismatch for {name}: expected {county}")
                 continue
 
-            return {
-                'lat': Decimal(str(location['lat'])),
-                'lng': Decimal(str(location['lng'])),
-                'source': 'lake_place',
-                'place_id': result.get('place_id'),
-                'place_name': name,
-                'vicinity': result.get('formatted_address')
-            }
+            # Get reviews and rating
+            user_ratings_total = result.get('user_ratings_total', 0) or 0
+            rating = float(result.get('rating') or 0)
+            
+            # Calculate score: prioritize places with reviews
+            score = 0.0
+            
+            # Must have at least 1 review
+            if user_ratings_total < 1:
+                print(f"Skipping {name}: no reviews (user_ratings_total={user_ratings_total})")
+                continue
+            
+            # Bonus for reviews (up to 20 points)
+            score += min(user_ratings_total / 5.0, 20)
+            
+            # Bonus for rating (up to 10 points)
+            score += rating * 2
+            
+            # Bonus for better type match (park > natural_feature)
+            if type_rank is not None:
+                score += (len(type_preferences) - type_rank) * 5
+            
+            # Bonus for 'park' type specifically
+            if 'park' in types:
+                score += 10
+            
+            print(f"Candidate: {name}, type_rank={type_rank}, reviews={user_ratings_total}, rating={rating}, score={score:.2f}, types={types[:3]}")
+            
+            if score > best_score:
+                best_score = score
+                best_candidate = {
+                    'lat': Decimal(str(location['lat'])),
+                    'lng': Decimal(str(location['lng'])),
+                    'source': 'lake_place',
+                    'place_id': result.get('place_id'),
+                    'place_name': name,
+                    'vicinity': result.get('formatted_address'),
+                    'rating': Decimal(str(rating)) if rating > 0 else None,
+                    'user_ratings_total': user_ratings_total,
+                    'place_types': types[:5]
+                }
 
-    return None
+    if best_candidate:
+        print(f"Selected lake place: {best_candidate['place_name']} (score={best_score:.2f}, reviews={best_candidate.get('user_ratings_total', 0)})")
+    else:
+        print(f"No lake place found with reviews for {lake_name}")
+    
+    return best_candidate
 
 # WDFW API endpoint (actual API discovered from network requests)
 # Note: WDFW website uses dynamic loading, data comes from backend API

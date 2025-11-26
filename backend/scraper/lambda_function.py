@@ -78,6 +78,84 @@ def clean_lake_name(name: str) -> str:
     return cleaned or name
 
 
+def clean_wdfw_title(title: str) -> str:
+    if not title:
+        return ''
+    cleaned = title.strip()
+    suffixes = [
+        ' | Washington Department of Fish & Wildlife',
+        ' - Washington Department of Fish & Wildlife',
+        ' Washington Department of Fish & Wildlife'
+    ]
+    for suffix in suffixes:
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[:-len(suffix)].strip()
+    return cleaned
+
+
+def fetch_wdfw_location_title(lake_name: str, county: str = "") -> Optional[str]:
+    key = (lake_name.lower(), county.lower())
+    if key in WDFW_TITLE_CACHE:
+        return WDFW_TITLE_CACHE[key]
+
+    query = f"{lake_name} Washington Department of Fish & Wildlife"
+    if county:
+        query = f"{lake_name} {county} County Washington Department of Fish & Wildlife"
+
+    params = {
+        'q': query,
+        'num': 5,
+        'hl': 'en'
+    }
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0 Safari/537.36'
+    }
+
+    try:
+        response = requests.get(GOOGLE_SEARCH_URL, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for result in soup.select('div.g'):
+            link = result.find('a', href=True)
+            if not link:
+                continue
+            href = link['href']
+            if 'wdfw.wa.gov/fishing/locations' not in href:
+                continue
+            title_tag = result.find('h3') or link.find('h3')
+            title_text = title_tag.get_text(strip=True) if title_tag else link.get_text(strip=True)
+            cleaned = clean_wdfw_title(title_text)
+            if cleaned:
+                WDFW_TITLE_CACHE[key] = cleaned
+                return cleaned
+
+        for link in soup.find_all('a', href=True):
+            href = link['href']
+            if 'wdfw.wa.gov/fishing/locations' not in href:
+                continue
+            title_text = link.get_text(strip=True)
+            cleaned = clean_wdfw_title(title_text)
+            if cleaned:
+                WDFW_TITLE_CACHE[key] = cleaned
+                return cleaned
+
+    except Exception as e:
+        print(f"WDFW lookup failed for {lake_name}: {str(e)}")
+
+    WDFW_TITLE_CACHE[key] = None
+    return None
+
+
+def get_canonical_location_name(lake_name: str, county: str = "") -> str:
+    base = clean_lake_name(lake_name)
+    title = fetch_wdfw_location_title(base, county)
+    if title:
+        return title
+    return base
+
+
 def normalize_county_name(name: str) -> str:
     if not name:
         return ''
@@ -330,9 +408,11 @@ def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
 # WDFW API endpoint (actual API discovered from network requests)
 # Note: WDFW website uses dynamic loading, data comes from backend API
 WDFW_API_URL = "https://wdfw.wa.gov/fishing/reports/stocking/trout-plants"
+GOOGLE_SEARCH_URL = "https://www.google.com/search"
+WDFW_TITLE_CACHE: Dict[Tuple[str, str], Optional[str]] = {}
 
 
-def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
+def geocode_lake(lake_name: str, county: str = "", canonical_hint: Optional[str] = None) -> Tuple[Optional[Dict], str]:
     """
     Get lake coordinates using Google Geocoding API
     
@@ -343,15 +423,18 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
     Returns:
         Dictionary containing lat and lng, or None if failed
     """
+    canonical_name = canonical_hint or get_canonical_location_name(lake_name, county)
+
     if not GOOGLE_GEOCODING_API_KEY:
         print("Warning: Google Geocoding API Key not set")
-        return None
+        return None, canonical_name
 
-    lake_place = find_lake_place(lake_name, county)
+    lake_place = find_lake_place(canonical_name, county)
     if lake_place:
-        return lake_place
+        lake_place['canonical_name'] = canonical_name
+        return lake_place, canonical_name
 
-    name_variants = build_lake_name_variants(lake_name)
+    name_variants = build_lake_name_variants(canonical_name)
 
     for variant in name_variants:
         try:
@@ -395,12 +478,14 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
                     print(f"Geocoding county mismatch for {variant}: expected {county}")
                     continue
 
-                return {
+                coordinates = {
                     'lat': Decimal(str(location['lat'])),
                     'lng': Decimal(str(location['lng'])),
                     'source': 'lake_center',
-                    'location_type': result.get('geometry', {}).get('location_type', 'APPROXIMATE')
+                    'location_type': result.get('geometry', {}).get('location_type', 'APPROXIMATE'),
+                    'canonical_name': canonical_name
                 }
+                return coordinates, canonical_name
             else:
                 print(f"Geocoding failed: {variant} - {data.get('status', 'UNKNOWN')}")
                 continue
@@ -409,7 +494,7 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
             print(f"Geocoding error {variant}: {str(e)}")
             continue
 
-    return None
+    return None, canonical_name
 
 
 def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -719,9 +804,10 @@ def save_to_dynamodb(plants: List[Dict]) -> int:
     
     for plant in plants:
         try:
-            # Get coordinates (if not already available)
-            coordinates = geocode_lake(plant['lake_name'], plant.get('county', ''))
-            access_point = find_lake_access_point(plant['lake_name'], plant.get('county', ''), coordinates)
+            county = plant.get('county', '')
+            coordinates, canonical_name = geocode_lake(plant['lake_name'], county)
+            primary_name = canonical_name or plant['lake_name']
+            access_point = find_lake_access_point(primary_name, county, coordinates)
             
             # Prepare DynamoDB item
             item = {
@@ -731,11 +817,14 @@ def save_to_dynamodb(plants: List[Dict]) -> int:
                 'species': plant['species'],
                 'number': plant['number'],
                 'fish_per_pound': Decimal(str(plant['fish_per_pound'])),
-                'county': plant.get('county', ''),
+                'county': county,
                 'region': plant.get('region', ''),
                 'hatchery': plant.get('hatchery', ''),
                 'timestamp': datetime.now().isoformat(),
             }
+
+            if canonical_name and canonical_name != plant['lake_name']:
+                item['canonical_lake_name'] = canonical_name
             
             # Add coordinates
             if access_point:

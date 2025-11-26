@@ -30,11 +30,13 @@ export const getTroutPlants = async (params = {}) => {
 
 /**
  * Get statistics
+ * @param {Object} params - Query parameters
+ * @param {number} params.days - Get stats from last N days (default 30)
  * @returns {Promise<Object>} Statistics data
  */
-export const getStatistics = async () => {
+export const getStatistics = async (params = {}) => {
   try {
-    const response = await api.get('/trout/stats')
+    const response = await api.get('/trout/stats', { params })
     return response.data || {}
   } catch (error) {
     console.error('Error fetching statistics:', error)

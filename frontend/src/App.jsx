@@ -34,7 +34,7 @@ function App() {
       
       const [plantsData, statsData] = await Promise.all([
         getTroutPlants({ days: filters.days }),
-        getStatistics()
+        getStatistics({ days: filters.days })
       ])
       
       setPlants(plantsData)
@@ -175,4 +175,3 @@ function App() {
 }
 
 export default App
-

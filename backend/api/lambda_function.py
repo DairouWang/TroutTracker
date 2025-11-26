@@ -158,7 +158,7 @@ def get_lake_by_name(lake_name: str) -> Optional[Dict]:
         raise
 
 
-def get_statistics() -> Dict:
+def get_statistics(days: int = 30) -> Dict:
     """
     Get statistics
 
@@ -166,13 +166,8 @@ def get_statistics() -> Dict:
         Dictionary of statistics
     """
     try:
-        response = table.scan()
-        items = response.get('Items', [])
-
-        # Handle pagination
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
-            items.extend(response.get('Items', []))
+        safe_days = max(1, days)
+        items = get_trout_plants(days=safe_days)
 
         # Calculate statistics
         total_records = len(items)
@@ -350,7 +345,8 @@ def lambda_handler(event, context):
         
         elif path == '/trout/stats' and http_method == 'GET':
             # Get statistics
-            stats = get_statistics()
+            days = int(query_params.get('days', '30'))
+            stats = get_statistics(days)
 
             return {
                 'statusCode': 200,

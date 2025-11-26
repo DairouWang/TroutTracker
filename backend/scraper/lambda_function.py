@@ -70,6 +70,14 @@ ABBREVIATION_REPLACEMENTS = [
 ]
 
 
+def clean_lake_name(name: str) -> str:
+    if not name:
+        return ''
+    # Remove trailing parenthetical descriptors like "(County)" or "(Lake)"
+    cleaned = re.sub(r'\s*\([^)]*\)\s*$', '', name).strip()
+    return cleaned or name
+
+
 def normalize_county_name(name: str) -> str:
     if not name:
         return ''
@@ -588,6 +596,7 @@ def scrape_trout_plants() -> List[Dict]:
                         lake_cell = cols[0]
                         lake_link = lake_cell.find('a')
                         lake_name = lake_link.text.strip() if lake_link else cols[0].text.strip()
+                        lake_name = clean_lake_name(lake_name)
                         
                         # Extract county information
                         county_link = lake_cell.find_all('a')

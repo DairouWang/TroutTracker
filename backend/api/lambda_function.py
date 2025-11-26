@@ -13,10 +13,10 @@ from boto3.dynamodb.conditions import Key, Attr
 
 # AWS clients
 dynamodb = boto3.resource('dynamodb')
-table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'TroutStockingData')
-table = dynamodb.Table(table_name)
-feedback_table_name = os.environ.get('FEEDBACK_TABLE_NAME')
-feedback_table = dynamodb.Table(feedback_table_name) if feedback_table_name else None
+STOCKING_TABLE_NAME = 'TroutTracker-StockingData'
+table = dynamodb.Table(STOCKING_TABLE_NAME)
+FEEDBACK_TABLE_NAME = 'TroutTracker-Feedback'
+feedback_table = dynamodb.Table(FEEDBACK_TABLE_NAME)
 ses_region = os.environ.get('SES_REGION', os.environ.get('AWS_REGION', 'us-west-2'))
 ses_client = boto3.client('ses', region_name=ses_region)
 lambda_client = boto3.client('lambda')

@@ -18,8 +18,8 @@ import time
 
 # AWS client
 dynamodb = boto3.resource('dynamodb')
-table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'TroutStockingData')
-table = dynamodb.Table(table_name)
+STOCKING_TABLE_NAME = 'TroutTracker-StockingData'
+table = dynamodb.Table(STOCKING_TABLE_NAME)
 lambda_client = boto3.client('lambda')
 LAKE_MATCHER_FUNCTION_NAME = os.environ.get('LAKE_MATCHER_FUNCTION_NAME')
 

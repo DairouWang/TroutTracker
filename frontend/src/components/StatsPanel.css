@@ -1,13 +1,10 @@
 .stats-panel {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  right: 1rem;
+  position: relative;
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
-  z-index: 10;
-  pointer-events: none;
+  margin: 1rem 1rem 0;
+  z-index: 1;
 }
 
 .stat-card {
@@ -94,6 +91,7 @@
 @media (max-width: 768px) {
   .stats-panel {
     position: static;
+    margin: 0;
     padding: 0.5rem;
     background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
@@ -139,4 +137,3 @@
     display: none;
   }
 }
-

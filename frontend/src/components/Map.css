@@ -79,6 +79,24 @@
   text-align: right;
 }
 
+.info-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.info-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.info-link:hover,
+.info-link:focus {
+  text-decoration: underline;
+}
+
 /* Map legend container */
 .map-legend-container {
   position: absolute;
@@ -131,4 +149,3 @@
     display: none;
   }
 }
-

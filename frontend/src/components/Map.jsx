@@ -122,69 +122,90 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
         onUnmount={onUnmount}
         options={mapOptions}
       >
-        {plantsWithCoordinates.map((plant) => (
-          <Marker
-            key={plant.id}
-            position={{
-              lat: parseFloat(plant.coordinates.lat),
-              lng: parseFloat(plant.coordinates.lng)
-            }}
-            onClick={() => handleMarkerClick(plant)}
-            icon={getMarkerIcon(plant.species)}
-            animation={selectedPlant?.id === plant.id ? window.google.maps.Animation.BOUNCE : null}
-          >
-            {activeMarker === plant.id && (
-              <InfoWindow onCloseClick={handleInfoWindowClose}>
-                <div className="info-window">
-                  <h3 className="info-window-title">{plant.lake_name}</h3>
-                  
-                  <div className="info-window-content">
-                    <div className="info-row">
-                      <span className="info-label">Stocking Date:</span>
-                      <span className="info-value">{plant.stock_date}</span>
-                    </div>
+        {plantsWithCoordinates.map((plant) => {
+          const lat = parseFloat(plant.coordinates.lat)
+          const lng = parseFloat(plant.coordinates.lng)
+
+          if (Number.isNaN(lat) || Number.isNaN(lng)) {
+            return null
+          }
+
+          const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`
+
+          return (
+            <Marker
+              key={plant.id}
+              position={{ lat, lng }}
+              onClick={() => handleMarkerClick(plant)}
+              icon={getMarkerIcon(plant.species)}
+              animation={selectedPlant?.id === plant.id ? window.google.maps.Animation.BOUNCE : null}
+            >
+              {activeMarker === plant.id && (
+                <InfoWindow onCloseClick={handleInfoWindowClose}>
+                  <div className="info-window">
+                    <h3 className="info-window-title">{plant.lake_name}</h3>
                     
-                    <div className="info-row">
-                      <span className="info-label">Species:</span>
-                      <span className="info-value">{plant.species}</span>
-                    </div>
-                    
-                    <div className="info-row">
-                      <span className="info-label">Quantity:</span>
-                      <span className="info-value">{plant.number?.toLocaleString()} fish</span>
-                    </div>
-                    
-                    <div className="info-row">
-                      <span className="info-label">Size:</span>
-                      <span className="info-value">{plant.fish_per_pound} per lb</span>
-                    </div>
-                    
-                    {plant.county && (
+                    <div className="info-window-content">
                       <div className="info-row">
-                        <span className="info-label">County:</span>
-                        <span className="info-value">{plant.county}</span>
+                        <span className="info-label">Stocking Date:</span>
+                        <span className="info-value">{plant.stock_date}</span>
                       </div>
-                    )}
-                    
-                    {plant.region && (
+                      
                       <div className="info-row">
-                        <span className="info-label">Region:</span>
-                        <span className="info-value">Region {plant.region}</span>
+                        <span className="info-label">Species:</span>
+                        <span className="info-value">{plant.species}</span>
                       </div>
-                    )}
-                    
-                    {plant.hatchery && (
+                      
                       <div className="info-row">
-                        <span className="info-label">Hatchery:</span>
-                        <span className="info-value">{plant.hatchery}</span>
+                        <span className="info-label">Quantity:</span>
+                        <span className="info-value">{plant.number?.toLocaleString()} fish</span>
+                      </div>
+                      
+                      <div className="info-row">
+                        <span className="info-label">Size:</span>
+                        <span className="info-value">{plant.fish_per_pound} per lb</span>
+                      </div>
+                      
+                      {plant.county && (
+                        <div className="info-row">
+                          <span className="info-label">County:</span>
+                          <span className="info-value">{plant.county}</span>
+                        </div>
+                      )}
+                      
+                      {plant.region && (
+                        <div className="info-row">
+                          <span className="info-label">Region:</span>
+                          <span className="info-value">Region {plant.region}</span>
+                        </div>
+                      )}
+                      
+                      {plant.hatchery && (
+                        <div className="info-row">
+                          <span className="info-label">Hatchery:</span>
+                          <span className="info-value">{plant.hatchery}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {mapsUrl && (
+                      <div className="info-actions">
+                        <a
+                          href={mapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="info-link"
+                        >
+                          Open in Google Maps
+                        </a>
                       </div>
                     )}
                   </div>
-                </div>
-              </InfoWindow>
-            )}
-          </Marker>
-        ))}
+                </InfoWindow>
+              )}
+            </Marker>
+          )
+        })}
       </GoogleMap>
 
       {/* Legend - Desktop only */}
@@ -212,4 +233,3 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
 }
 
 export default Map
-

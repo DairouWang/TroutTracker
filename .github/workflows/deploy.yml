@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      run_scraper:
+        description: 'Run scraper deployment + trigger'
+        required: false
+        default: 'true'
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -122,6 +127,10 @@ jobs:
           echo "table=$FEEDBACK_TABLE" >> $GITHUB_OUTPUT
 
   deploy-lambda-scraper:
+    if: ${{ !(
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[skip scraper]')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_scraper == 'false')
+    ) }}
     name: Deploy Scraper Lambda
     runs-on: ubuntu-latest
     needs:

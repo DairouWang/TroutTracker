@@ -419,10 +419,14 @@ WDFW_TITLE_CACHE: Dict[Tuple[str, str], Optional[str]] = {}
 
 def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
     """Invoke the Lake Matcher Lambda to resolve coordinates."""
-    if not lake_name or not LAKE_MATCHER_FUNCTION_NAME:
+    if not lake_name:
+        return None
+    if not LAKE_MATCHER_FUNCTION_NAME:
+        print(f"[LakeMatcher] Function name not configured, skipping lookup for {lake_name}")
         return None
 
     try:
+        print(f"[LakeMatcher] Invoking {LAKE_MATCHER_FUNCTION_NAME} for '{lake_name}'")
         response = lambda_client.invoke(
             FunctionName=LAKE_MATCHER_FUNCTION_NAME,
             InvocationType='RequestResponse',
@@ -443,7 +447,7 @@ def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
             status_code = match_payload.get('statusCode', 500)
             body = match_payload.get('body')
             if status_code != 200:
-                print(f"Lake matcher error for {lake_name}: status={status_code}")
+                print(f"[LakeMatcher] Error for {lake_name}: status={status_code}")
                 return None
             if isinstance(body, str):
                 try:
@@ -454,7 +458,7 @@ def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
                 match_payload = body
         return match_payload
     except Exception as exc:
-        print(f"Lake matcher invocation failed for {lake_name}: {exc}")
+        print(f"[LakeMatcher] Invocation failed for {lake_name}: {exc}")
         return None
 
 
@@ -472,6 +476,7 @@ def geocode_lake(lake_name: str, county: str = "", canonical_hint: Optional[str]
     canonical_name = canonical_hint or get_canonical_location_name(lake_name, county)
 
     # Try deterministic lake matcher first
+    print(f"[Geocode] Resolving '{lake_name}' (county={county or 'n/a'})")
     matcher_result = invoke_lake_matcher(lake_name)
     if (not matcher_result) and canonical_name and canonical_name != lake_name:
         matcher_result = invoke_lake_matcher(canonical_name)

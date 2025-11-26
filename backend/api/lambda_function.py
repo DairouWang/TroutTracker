@@ -5,7 +5,7 @@ Provides REST API endpoints to query trout stocking data and feedback
 import json
 import os
 import boto3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -41,9 +41,10 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
         List of stocking data
     """
     try:
-        # Calculate date range
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
+        # Calculate date range (date-only to avoid partial-day offsets)
+        safe_days = max(1, days)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=safe_days - 1)
 
         # Scan table (in production, should use GSI for more efficient queries)
         response = table.scan()
@@ -57,7 +58,7 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
         # Parse stocking dates for filtering/sorting
         def parse_date(date_str):
             try:
-                return datetime.strptime(date_str, '%b %d, %Y')
+                return datetime.strptime(date_str, '%b %d, %Y').date()
             except Exception:
                 return None
 
@@ -71,7 +72,7 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
         # Sort by date (newest first); invalid dates fall to the end
         def sort_key(item):
             stock_date = parse_date(item.get('stock_date', ''))
-            return stock_date or datetime(1900, 1, 1)
+            return stock_date or date(1900, 1, 1)
 
         filtered_items.sort(key=sort_key, reverse=True)
         

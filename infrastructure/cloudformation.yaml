@@ -194,8 +194,8 @@ Resources:
   LakeMatcherLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      Runtime: nodejs20.x
-      Handler: src/index.handler
+      Runtime: python3.11
+      Handler: lambda_function.handler
       FunctionName: !Sub '${ProjectName}-LakeMatcher'
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 20
@@ -205,9 +205,8 @@ Resources:
           LAKE_MATCH_CACHE_TABLE: !Ref LakeMatchCacheTable
       Code:
         ZipFile: |
-          exports.handler = async () => {
-            return { statusCode: 200, body: 'Placeholder' };
-          };
+          def handler(event, context):
+              return {'statusCode': 200, 'body': 'Placeholder'}
       Tags:
         - Key: Project
           Value: !Ref ProjectName

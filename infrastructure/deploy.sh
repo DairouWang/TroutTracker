@@ -57,16 +57,19 @@ aws cloudformation deploy \
 echo "Step 2: Packaging and deploying Lake Matcher Lambda..."
 cd ../backend/lake-matcher
 
-npm ci --omit=dev
+pip install -r requirements.txt -t . --no-cache-dir
+
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 echo "Creating lake matcher zip..."
 zip -r lake-matcher.zip . \
     -x "*.git*" \
-    -x "tests/*" \
-    -x "tests/**/*" \
     -x "scripts/*" \
     -x "scripts/**/*" \
-    -x "*.md" \
+    -x "tests.py" \
+    -x "__pycache__/*" \
+    -x "*.pyc" \
     -q
 
 LAKE_MATCH_FUNCTION_NAME=$(aws cloudformation describe-stacks \

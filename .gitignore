@@ -45,6 +45,15 @@ backend/scraper/urllib3/
 backend/scraper/bin/
 backend/scraper/*.dist-info/
 backend/scraper/*-*.dist-info/
+backend/lake-matcher/boto3/
+backend/lake-matcher/botocore/
+backend/lake-matcher/dateutil/
+backend/lake-matcher/jmespath/
+backend/lake-matcher/s3transfer/
+backend/lake-matcher/urllib3/
+backend/lake-matcher/bin/
+backend/lake-matcher/*.dist-info/
+backend/lake-matcher/*-info/
 
 # Build outputs
 dist/

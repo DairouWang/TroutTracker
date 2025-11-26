@@ -104,6 +104,21 @@ aws lambda update-function-code \
 rm scraper.zip
 echo "Scraper Lambda deployed successfully!"
 
+echo "Triggering scraper to refresh data..."
+SCRAPER_INVOKE_OUTPUT=$(mktemp)
+if aws lambda invoke \
+    --function-name $SCRAPER_FUNCTION_NAME \
+    --payload '{}' \
+    --cli-read-timeout 600 \
+    --region $REGION \
+    $SCRAPER_INVOKE_OUTPUT > /dev/null 2>&1; then
+    echo "✓ Scraper run complete"
+    cat $SCRAPER_INVOKE_OUTPUT
+else
+    echo "⚠️  Failed to invoke scraper automatically. Please run it manually."
+fi
+rm -f $SCRAPER_INVOKE_OUTPUT
+
 echo "Step 3: Packaging and deploying API Lambda..."
 cd ../api
 
@@ -235,4 +250,3 @@ echo "1. Visit your frontend URL to test the application"
 echo "2. Trigger the scraper manually to populate data:"
 echo "   aws lambda invoke --function-name ${SCRAPER_FUNCTION_NAME} response.json"
 echo "=========================================="
-

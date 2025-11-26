@@ -198,6 +198,15 @@ def _places_text_search(query: str, place_type: Optional[str] = None) -> List[Di
         return []
 
 
+def _to_decimal(value) -> Optional[Decimal]:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return Decimal(0)
+
+
 def find_lake_place(lake_name: str, county: str = "") -> Optional[Dict]:
     """Use Google Places Text Search to locate the actual lake feature."""
     if not GOOGLE_PLACES_API_KEY:
@@ -458,6 +467,13 @@ def _select_best_candidate(results: List[Dict], **kwargs) -> Optional[Dict]:
         if score > best_score:
             best_score = score
             best_candidate = candidate
+
+    if not best_candidate:
+        return None
+
+    for numeric_field in ('rating', 'user_ratings_total', 'distance_m'):
+        if numeric_field in best_candidate and best_candidate[numeric_field] is not None:
+            best_candidate[numeric_field] = _to_decimal(best_candidate[numeric_field])
 
     return best_candidate
 

@@ -27,6 +27,22 @@ ACCESS_POINT_KEYWORDS = [
     'boat', 'launch', 'ramp', 'access', 'landing', 'marina', 'dock', 'parking', 'fishing'
 ]
 
+DISALLOWED_PLACE_TYPES = {
+    'route',
+    'street_address',
+    'premise',
+    'geocode'
+}
+
+DISALLOWED_NAME_PATTERNS = [
+    r'\broad\b', r'\brd\b', r'\bstreet\b', r'\bst\b', r'\bdrive\b', r'\bdr\b',
+    r'\bavenue\b', r'\bave\b', r'\bway\b', r'\blane\b', r'\bln\b', r'\btrail\b',
+    r'\btrl\b', r'\bhighway\b', r'\bhwy\b', r'\bcourt\b', r'\bct\b', r'\bcircle\b',
+    r'\bcir\b', r'\bboulevard\b', r'\bblvd\b', r'\bplace\b', r'\bpl\b'
+]
+
+DISALLOWED_NAME_REGEXES = [re.compile(pattern, re.IGNORECASE) for pattern in DISALLOWED_NAME_PATTERNS]
+
 ABBREVIATION_REPLACEMENTS = [
     (r'\bLk\b', 'Lake'),
     (r'\bLks\b', 'Lakes'),
@@ -257,6 +273,12 @@ def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Option
 
             types = set(result.get('types', []))
             name = (result.get('name') or '').lower()
+
+            if types & DISALLOWED_PLACE_TYPES:
+                continue
+
+            if any(regex.search(name) for regex in DISALLOWED_NAME_REGEXES):
+                continue
 
             type_match = bool(allowed_types & types)
             keyword_match = any(keyword in name for keyword in ACCESS_POINT_KEYWORDS)

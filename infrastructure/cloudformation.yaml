@@ -75,6 +75,22 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # DynamoDB Table - Lake Match Cache
+  LakeMatchCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-LakeMatchCache'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: lake_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: lake_name
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
   # Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -104,6 +120,7 @@ Resources:
                   - !GetAtt TroutStockingTable.Arn
                   - !Sub '${TroutStockingTable.Arn}/index/*'
                   - !GetAtt TroutFeedbackTable.Arn
+                  - !GetAtt LakeMatchCacheTable.Arn
         - PolicyName: SESSendEmail
           PolicyDocument:
             Version: '2012-10-17'
@@ -113,6 +130,14 @@ Resources:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource: '*'
+        - PolicyName: LakeMatcherInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-LakeMatcher'
 
   # Scraper Lambda Function
   ScraperLambdaFunction:
@@ -128,6 +153,8 @@ Resources:
           DYNAMODB_TABLE_NAME: !Ref TroutStockingTable
           FEEDBACK_TABLE_NAME: !Ref TroutFeedbackTable
           GOOGLE_GEOCODING_API_KEY: !Ref GoogleGeocodingApiKey
+          LAKE_MATCHER_FUNCTION_NAME: !Ref LakeMatcherLambdaFunction
+          LAKE_MATCH_CACHE_TABLE: !Ref LakeMatchCacheTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -151,6 +178,8 @@ Resources:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref TroutStockingTable
           FEEDBACK_TABLE_NAME: !Ref TroutFeedbackTable
+          LAKE_MATCHER_FUNCTION_NAME: !Ref LakeMatcherLambdaFunction
+          LAKE_MATCH_CACHE_TABLE: !Ref LakeMatchCacheTable
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -160,6 +189,30 @@ Resources:
           Value: !Ref ProjectName
         - Key: Name
           Value: !Sub '${ProjectName}-API'
+
+  # Lake Matcher Lambda Function
+  LakeMatcherLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs20.x
+      Handler: src/index.handler
+      FunctionName: !Sub '${ProjectName}-LakeMatcher'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 20
+      MemorySize: 512
+      Environment:
+        Variables:
+          LAKE_MATCH_CACHE_TABLE: !Ref LakeMatchCacheTable
+      Code:
+        ZipFile: |
+          exports.handler = async () => {
+            return { statusCode: 200, body: 'Placeholder' };
+          };
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Name
+          Value: !Sub '${ProjectName}-LakeMatcher'
 
   # CloudWatch Events Rule - Trigger daily at 9:00 AM PST
   ScraperScheduleRule:
@@ -215,6 +268,14 @@ Resources:
       RestApiId: !Ref TroutTrackerApi
       ParentId: !Ref TroutResource
       PathPart: stats
+
+  # API Gateway Resource - /match-lake
+  MatchLakeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ParentId: !GetAtt TroutTrackerApi.RootResourceId
+      PathPart: match-lake
 
   # API Gateway Method - GET /trout
   TroutGetMethod:
@@ -329,6 +390,69 @@ Resources:
           ResponseModels:
             application/json: Empty
 
+  # API Gateway Method - GET /match-lake
+  MatchLakeGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref MatchLakeResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  # API Gateway Method - POST /match-lake
+  MatchLakePostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref MatchLakeResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  # API Gateway Method - OPTIONS /match-lake
+  MatchLakeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TroutTrackerApi
+      ResourceId: !Ref MatchLakeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   # API Gateway Deployment
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
@@ -338,6 +462,9 @@ Resources:
       - StatsGetMethod
       - FeedbackPostMethod
       - FeedbackOptionsMethod
+      - MatchLakeGetMethod
+      - MatchLakePostMethod
+      - MatchLakeOptionsMethod
     Properties:
       RestApiId: !Ref TroutTrackerApi
       StageName: prod
@@ -502,3 +629,11 @@ Outputs:
   ApiFunctionName:
     Description: API Lambda Function Name
     Value: !Ref ApiLambdaFunction
+
+  LakeMatchFunctionName:
+    Description: Lake Matcher Lambda Function Name
+    Value: !Ref LakeMatcherLambdaFunction
+
+  LakeMatchCacheTableName:
+    Description: Lake Match Cache Table Name
+    Value: !Ref LakeMatchCacheTable

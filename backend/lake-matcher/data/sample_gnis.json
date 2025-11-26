@@ -1,0 +1,38 @@
+[
+  {
+    "gnis_id": "123456",
+    "official_name": "South Lewis County Regional Park Pond",
+    "feature_type": "Lake",
+    "county_name": "Lewis",
+    "latitude": 46.586123,
+    "longitude": -122.482331,
+    "alternative_names": [
+      "Lewis Co Park Pond",
+      "South Lewis Co Pond"
+    ]
+  },
+  {
+    "gnis_id": "789012",
+    "official_name": "Battle Ground Lake",
+    "feature_type": "Lake",
+    "county_name": "Clark",
+    "latitude": 45.778611,
+    "longitude": -122.541389,
+    "alternative_names": [
+      "Battle Ground Lk",
+      "Battle Ground State Park Lake"
+    ]
+  },
+  {
+    "gnis_id": "345678",
+    "official_name": "Pine Lake",
+    "feature_type": "Lake",
+    "county_name": "King",
+    "latitude": 47.5897,
+    "longitude": -122.0357,
+    "alternative_names": [
+      "Pine Lk",
+      "Pine Park Lake"
+    ]
+  }
+]

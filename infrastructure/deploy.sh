@@ -54,8 +54,39 @@ aws cloudformation deploy \
     --capabilities CAPABILITY_NAMED_IAM \
     --region $REGION
 
-echo "Step 2: Packaging and deploying Scraper Lambda..."
-cd ../backend/scraper
+echo "Step 2: Packaging and deploying Lake Matcher Lambda..."
+cd ../backend/lake-matcher
+
+npm ci --omit=dev
+
+echo "Creating lake matcher zip..."
+zip -r lake-matcher.zip . \
+    -x "*.git*" \
+    -x "tests/*" \
+    -x "tests/**/*" \
+    -x "scripts/*" \
+    -x "scripts/**/*" \
+    -x "*.md" \
+    -q
+
+LAKE_MATCH_FUNCTION_NAME=$(aws cloudformation describe-stacks \
+    --stack-name $STACK_NAME \
+    --query 'Stacks[0].Outputs[?OutputKey==`LakeMatchFunctionName`].OutputValue' \
+    --output text \
+    --region $REGION)
+
+echo "Uploading Lake Matcher Lambda..."
+aws lambda update-function-code \
+    --function-name $LAKE_MATCH_FUNCTION_NAME \
+    --zip-file fileb://lake-matcher.zip \
+    --region $REGION \
+    --output text > /dev/null 2>&1 && echo "✓ Upload complete"
+
+rm lake-matcher.zip
+echo "Lake Matcher Lambda deployed successfully!"
+
+echo "Step 3: Packaging and deploying Scraper Lambda..."
+cd ../scraper
 
 # Install dependencies
 pip install -r requirements.txt -t . --no-cache-dir
@@ -119,7 +150,7 @@ else
 fi
 rm -f $SCRAPER_INVOKE_OUTPUT
 
-echo "Step 3: Packaging and deploying API Lambda..."
+echo "Step 4: Packaging and deploying API Lambda..."
 cd ../api
 
 # Install dependencies
@@ -165,7 +196,7 @@ aws lambda update-function-code \
 rm api.zip
 echo "API Lambda deployed successfully!"
 
-echo "Step 4: Building and deploying frontend..."
+echo "Step 5: Building and deploying frontend..."
 cd ../../frontend
 
 # Get API endpoint

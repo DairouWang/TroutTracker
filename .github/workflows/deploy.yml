@@ -124,7 +124,9 @@ jobs:
   deploy-lambda-scraper:
     name: Deploy Scraper Lambda
     runs-on: ubuntu-latest
-    needs: deploy-infrastructure
+    needs:
+      - deploy-infrastructure
+      - deploy-lake-matcher
     
     steps:
       - name: Checkout code
@@ -196,10 +198,66 @@ jobs:
           
           rm -f scraper.zip
 
+  deploy-lake-matcher:
+    name: Deploy Lake Matcher Lambda
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package and deploy Lake Matcher Lambda
+        run: |
+          cd backend/lake-matcher
+          
+          npm ci --omit=dev
+          
+          zip -r lake-matcher.zip . \
+            -x "*.git*" \
+            -x "tests/*" \
+            -x "tests/*/*" \
+            -x "scripts/*" \
+            -x "scripts/*/*" \
+            -x "*.md" \
+            -q
+          
+          PACKAGE_SIZE=$(du -h lake-matcher.zip | cut -f1)
+          echo "📦 Lake matcher package size: $PACKAGE_SIZE"
+          
+          LAKE_MATCH_FUNCTION=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`LakeMatchFunctionName`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          aws lambda update-function-code \
+            --function-name $LAKE_MATCH_FUNCTION \
+            --zip-file fileb://lake-matcher.zip \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Lake Matcher Lambda deployed successfully"
+          
+          rm -f lake-matcher.zip
+
   deploy-lambda-api:
     name: Deploy API Lambda
     runs-on: ubuntu-latest
-    needs: deploy-infrastructure
+    needs:
+      - deploy-infrastructure
+      - deploy-lake-matcher
     
     steps:
       - name: Checkout code

@@ -17,6 +17,8 @@ import time
 dynamodb = boto3.resource('dynamodb')
 table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'TroutStockingData')
 table = dynamodb.Table(table_name)
+lambda_client = boto3.client('lambda')
+LAKE_MATCHER_FUNCTION_NAME = os.environ.get('LAKE_MATCHER_FUNCTION_NAME')
 
 # Google Geocoding API
 GOOGLE_GEOCODING_API_KEY = os.environ.get('GOOGLE_GEOCODING_API_KEY', '')
@@ -412,6 +414,47 @@ GOOGLE_SEARCH_URL = "https://www.google.com/search"
 WDFW_TITLE_CACHE: Dict[Tuple[str, str], Optional[str]] = {}
 
 
+def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
+    """Invoke the Lake Matcher Lambda to resolve coordinates."""
+    if not lake_name or not LAKE_MATCHER_FUNCTION_NAME:
+        return None
+
+    try:
+        response = lambda_client.invoke(
+            FunctionName=LAKE_MATCHER_FUNCTION_NAME,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({'wdfwName': lake_name})
+        )
+        payload_stream = response.get('Payload')
+        if not payload_stream:
+            return None
+        raw_body = payload_stream.read()
+        if hasattr(payload_stream, 'close'):
+            payload_stream.close()
+        if not raw_body:
+            return None
+        if isinstance(raw_body, (bytes, bytearray)):
+            raw_body = raw_body.decode('utf-8')
+        match_payload = json.loads(raw_body)
+        if 'statusCode' in match_payload:
+            status_code = match_payload.get('statusCode', 500)
+            body = match_payload.get('body')
+            if status_code != 200:
+                print(f"Lake matcher error for {lake_name}: status={status_code}")
+                return None
+            if isinstance(body, str):
+                try:
+                    match_payload = json.loads(body)
+                except json.JSONDecodeError:
+                    match_payload = None
+            else:
+                match_payload = body
+        return match_payload
+    except Exception as exc:
+        print(f"Lake matcher invocation failed for {lake_name}: {exc}")
+        return None
+
+
 def geocode_lake(lake_name: str, county: str = "", canonical_hint: Optional[str] = None) -> Tuple[Optional[Dict], str]:
     """
     Get lake coordinates using Google Geocoding API
@@ -424,6 +467,28 @@ def geocode_lake(lake_name: str, county: str = "", canonical_hint: Optional[str]
         Dictionary containing lat and lng, or None if failed
     """
     canonical_name = canonical_hint or get_canonical_location_name(lake_name, county)
+
+    # Try deterministic lake matcher first
+    matcher_result = invoke_lake_matcher(lake_name)
+    if (not matcher_result) and canonical_name and canonical_name != lake_name:
+        matcher_result = invoke_lake_matcher(canonical_name)
+
+    if matcher_result and matcher_result.get('lat') is not None and matcher_result.get('lng') is not None:
+        canonical_from_matcher = matcher_result.get('officialName') or canonical_name
+        coordinates: Dict[str, Optional[Decimal]] = {
+            'lat': Decimal(str(matcher_result['lat'])),
+            'lng': Decimal(str(matcher_result['lng'])),
+            'source': matcher_result.get('source', 'lake_matcher'),
+            'canonical_name': canonical_from_matcher
+        }
+        match_score = matcher_result.get('matched_score')
+        if match_score is not None:
+            try:
+                coordinates['match_score'] = Decimal(str(match_score))
+            except Exception:
+                pass
+        print(f"Lake matcher resolved {lake_name} -> {canonical_from_matcher}")
+        return coordinates, canonical_from_matcher
 
     if not GOOGLE_GEOCODING_API_KEY:
         print("Warning: Google Geocoding API Key not set")

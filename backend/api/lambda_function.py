@@ -19,6 +19,46 @@ feedback_table_name = os.environ.get('FEEDBACK_TABLE_NAME')
 feedback_table = dynamodb.Table(feedback_table_name) if feedback_table_name else None
 ses_region = os.environ.get('SES_REGION', os.environ.get('AWS_REGION', 'us-west-2'))
 ses_client = boto3.client('ses', region_name=ses_region)
+lambda_client = boto3.client('lambda')
+LAKE_MATCHER_FUNCTION_NAME = os.environ.get('LAKE_MATCHER_FUNCTION_NAME')
+
+
+def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
+    """Invoke the Lake Matcher Lambda and return its payload."""
+    if not lake_name or not LAKE_MATCHER_FUNCTION_NAME:
+        return None
+
+    try:
+        response = lambda_client.invoke(
+            FunctionName=LAKE_MATCHER_FUNCTION_NAME,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({'wdfwName': lake_name})
+        )
+        payload_stream = response.get('Payload')
+        if not payload_stream:
+            return None
+        raw_body = payload_stream.read()
+        if hasattr(payload_stream, 'close'):
+            payload_stream.close()
+        if not raw_body:
+            return None
+        if isinstance(raw_body, (bytes, bytearray)):
+            raw_body = raw_body.decode('utf-8')
+        match_payload = json.loads(raw_body)
+        if 'statusCode' in match_payload:
+            status_code = match_payload.get('statusCode', 500)
+            body = match_payload.get('body')
+            if status_code != 200:
+                print(f"[LakeMatcher] Invocation error for {lake_name}: status={status_code}")
+                return None
+            if isinstance(body, str):
+                match_payload = json.loads(body)
+            else:
+                match_payload = body
+        return match_payload
+    except Exception as exc:
+        print(f"[LakeMatcher] Invocation failed for {lake_name}: {exc}")
+        return None
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -319,6 +359,57 @@ def lambda_handler(event, context):
                     'Content-Type': 'application/json'
                 },
                 'body': json.dumps(stats, cls=DecimalEncoder)
+            }
+
+        elif path == '/match-lake' and http_method in ('GET', 'POST'):
+            if not LAKE_MATCHER_FUNCTION_NAME:
+                return {
+                    'statusCode': 503,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json'
+                    },
+                    'body': json.dumps({'message': 'Lake matcher is not configured'})
+                }
+
+            requested_name = None
+            if http_method == 'GET':
+                requested_name = (query_params.get('wdfwName') or query_params.get('name') or '').strip()
+            else:
+                try:
+                    body = json.loads(event.get('body', '{}'))
+                except json.JSONDecodeError:
+                    body = {}
+                requested_name = (body.get('wdfwName') or body.get('name') or '').strip()
+
+            if not requested_name:
+                return {
+                    'statusCode': 400,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json'
+                    },
+                    'body': json.dumps({'message': 'wdfwName parameter is required'})
+                }
+
+            match_result = invoke_lake_matcher(requested_name)
+            if match_result is None:
+                return {
+                    'statusCode': 502,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json'
+                    },
+                    'body': json.dumps({'message': 'Lake matcher invocation failed'})
+                }
+
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json'
+                },
+                'body': json.dumps(match_result)
             }
 
         elif path == '/feedback' and http_method == 'POST':

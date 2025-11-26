@@ -4,6 +4,7 @@ Scrapes trout stocking data from WDFW website and stores it in DynamoDB
 """
 import json
 import os
+import math
 import boto3
 import requests
 from datetime import datetime
@@ -18,6 +19,8 @@ table = dynamodb.Table(table_name)
 
 # Google Geocoding API
 GOOGLE_GEOCODING_API_KEY = os.environ.get('GOOGLE_GEOCODING_API_KEY', '')
+GOOGLE_PLACES_API_KEY = os.environ.get('GOOGLE_PLACES_API_KEY', GOOGLE_GEOCODING_API_KEY)
+ACCESS_POINT_SEARCH_RADIUS_METERS = int(os.environ.get('ACCESS_POINT_SEARCH_RADIUS', '5000'))
 
 # WDFW API endpoint (actual API discovered from network requests)
 # Note: WDFW website uses dynamic loading, data comes from backend API
@@ -78,7 +81,9 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
             
             return {
                 'lat': Decimal(str(location['lat'])),
-                'lng': Decimal(str(location['lng']))
+                'lng': Decimal(str(location['lng'])),
+                'source': 'lake_center',
+                'location_type': result.get('geometry', {}).get('location_type', 'APPROXIMATE')
             }
         else:
             print(f"Geocoding failed: {lake_name} - {data.get('status', 'UNKNOWN')}")
@@ -87,6 +92,126 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
     except Exception as e:
         print(f"Geocoding error {lake_name}: {str(e)}")
         return None
+
+
+def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the distance in meters between two lat/lon pairs."""
+    radius = 6371000  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return radius * c
+
+
+def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Optional[Dict]) -> Optional[Dict]:
+    """Use Google Places to find the best parking/boat launch near the lake."""
+    if not lake_coordinates or not GOOGLE_PLACES_API_KEY:
+        return None
+
+    try:
+        lake_lat = float(lake_coordinates['lat'])
+        lake_lng = float(lake_coordinates['lng'])
+    except (KeyError, ValueError, TypeError):
+        return None
+
+    search_queries = [
+        f"{lake_name} boat launch",
+        f"{lake_name} boat ramp",
+        f"{lake_name} boat launch parking",
+        "boat launch",
+        "boat ramp",
+        "fishing access",
+        "lake parking"
+    ]
+
+    if county:
+        search_queries.insert(0, f"{lake_name} {county} County boat launch")
+        search_queries.insert(1, f"{county} County boat launch")
+
+    best_candidate = None
+    best_score = float('-inf')
+
+    base_params = {
+        'location': f"{lake_lat},{lake_lng}",
+        'radius': ACCESS_POINT_SEARCH_RADIUS_METERS,
+        'region': 'us',
+        'key': GOOGLE_PLACES_API_KEY
+    }
+
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+
+    for query in search_queries:
+        params = {**base_params, 'keyword': query}
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as request_error:
+            print(f"Places API error for {lake_name} ({query}): {request_error}")
+            continue
+
+        results = data.get('results', [])
+        for result in results:
+            location = result.get('geometry', {}).get('location')
+            if not location:
+                continue
+
+            candidate_lat = location.get('lat')
+            candidate_lng = location.get('lng')
+            if candidate_lat is None or candidate_lng is None:
+                continue
+
+            distance = _haversine_distance_m(lake_lat, lake_lng, candidate_lat, candidate_lng)
+            types = set(result.get('types', []))
+            name = (result.get('name') or '').lower()
+
+            score = 0.0
+            if {'boat_ramp', 'boat_launch'} & types:
+                score += 8
+            if 'parking' in types:
+                score += 4
+            if 'rv_park' in types:
+                score += 1
+            if any(keyword in name for keyword in ['launch', 'ramp', 'boat']) and 'parking' in name:
+                score += 3
+            elif any(keyword in name for keyword in ['launch', 'ramp', 'boat']):
+                score += 2
+            elif 'parking' in name:
+                score += 1
+
+            # Prefer closer candidates; subtract 1 point every 750m
+            score -= distance / 750.0
+
+            # Slight boost if query contains the lake name (first three queries)
+            if lake_name.lower() in query.lower():
+                score += 1
+
+            if score > best_score:
+                best_score = score
+                best_candidate = {
+                    'lat': Decimal(str(candidate_lat)),
+                    'lng': Decimal(str(candidate_lng)),
+                    'source': 'access_point',
+                    'place_id': result.get('place_id'),
+                    'place_name': result.get('name'),
+                    'vicinity': result.get('vicinity'),
+                    'distance_m': round(distance, 1),
+                    'search_query': query
+                }
+
+        # If we already found a very strong candidate, stop searching
+        if best_score >= 6:
+            break
+
+    if best_candidate:
+        return best_candidate
+
+    return None
 
 
 def scrape_trout_plants() -> List[Dict]:
@@ -186,6 +311,7 @@ def save_to_dynamodb(plants: List[Dict]) -> int:
         try:
             # Get coordinates (if not already available)
             coordinates = geocode_lake(plant['lake_name'], plant.get('county', ''))
+            access_point = find_lake_access_point(plant['lake_name'], plant.get('county', ''), coordinates)
             
             # Prepare DynamoDB item
             item = {
@@ -202,9 +328,17 @@ def save_to_dynamodb(plants: List[Dict]) -> int:
             }
             
             # Add coordinates
-            if coordinates:
+            if access_point:
+                item['coordinates'] = access_point
+                item['coordinate_origin'] = access_point.get('source', 'access_point')
+                if access_point.get('place_id'):
+                    item['coordinate_place_id'] = access_point['place_id']
+                if access_point.get('place_name'):
+                    item['coordinate_place_name'] = access_point['place_name']
+            elif coordinates:
                 item['coordinates'] = coordinates
-            
+                item['coordinate_origin'] = coordinates.get('source', 'lake_center')
+
             # Save to DynamoDB
             table.put_item(Item=item)
             saved_count += 1
@@ -275,4 +409,3 @@ def lambda_handler(event, context):
 if __name__ == "__main__":
     result = lambda_handler({}, None)
     print(json.dumps(result, indent=2))
-

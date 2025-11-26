@@ -2,6 +2,9 @@
 TroutTracker Lambda Scraper Function
 Scrapes trout stocking data from WDFW website and stores it in DynamoDB
 """
+
+print("SCRAPER STARTED")
+
 import json
 import os
 import math

@@ -21,6 +21,10 @@ table = dynamodb.Table(table_name)
 GOOGLE_GEOCODING_API_KEY = os.environ.get('GOOGLE_GEOCODING_API_KEY', '')
 GOOGLE_PLACES_API_KEY = os.environ.get('GOOGLE_PLACES_API_KEY', GOOGLE_GEOCODING_API_KEY)
 ACCESS_POINT_SEARCH_RADIUS_METERS = int(os.environ.get('ACCESS_POINT_SEARCH_RADIUS', '5000'))
+ACCESS_POINT_MAX_DISTANCE_METERS = int(os.environ.get('ACCESS_POINT_MAX_DISTANCE', '3000'))
+ACCESS_POINT_KEYWORDS = [
+    'boat', 'launch', 'ramp', 'access', 'landing', 'marina', 'dock', 'parking', 'fishing'
+]
 
 # WDFW API endpoint (actual API discovered from network requests)
 # Note: WDFW website uses dynamic loading, data comes from backend API
@@ -132,6 +136,16 @@ def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Option
         search_queries.insert(0, f"{lake_name} {county} County boat launch")
         search_queries.insert(1, f"{county} County boat launch")
 
+    allowed_types = {
+        'boat_ramp',
+        'boat_launch',
+        'marina',
+        'parking',
+        'rv_park',
+        'campground',
+        'park'
+    }
+
     best_candidate = None
     best_score = float('-inf')
 
@@ -167,8 +181,16 @@ def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Option
                 continue
 
             distance = _haversine_distance_m(lake_lat, lake_lng, candidate_lat, candidate_lng)
+            if distance > ACCESS_POINT_MAX_DISTANCE_METERS:
+                continue
+
             types = set(result.get('types', []))
             name = (result.get('name') or '').lower()
+
+            type_match = bool(allowed_types & types)
+            keyword_match = any(keyword in name for keyword in ACCESS_POINT_KEYWORDS)
+            if not (type_match or keyword_match):
+                continue
 
             score = 0.0
             if {'boat_ramp', 'boat_launch'} & types:

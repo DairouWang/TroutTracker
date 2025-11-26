@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0b7bc1" rx="48" />
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="18">
+    <path d="M100 80v198c0 42 34 76 76 76s76-34 76-76" />
+    <path d="M252 110c0 16-13 29-29 29s-29-13-29-29 13-29 29-29 29 13 29 29z" />
+    <path d="M324 180c58 0 108 60 108 60s-50 60-108 60-108-60-108-60 50-60 108-60z" />
+    <path d="M324 180c-12 20-14 40 0 60" />
+    <path d="M432 240c12 20 14 40 0 60" />
+    <path d="M348 230c-16 0-16 20 0 20s16-20 0-20z" />
+    <circle cx="164" cy="146" r="8" fill="#fff" stroke="none" />
+    <circle cx="188" cy="130" r="6" fill="#fff" stroke="none" />
+  </g>
+  <text x="256" y="420" fill="#fff" font-size="70" font-family="Poppins, 'Nunito', 'Avenir', Helvetica, Arial, sans-serif" font-weight="700" text-anchor="middle">Trout</text>
+  <text x="256" y="480" fill="#fff" font-size="70" font-family="Poppins, 'Nunito', 'Avenir', Helvetica, Arial, sans-serif" font-weight="700" text-anchor="middle">Tracker</text>
+</svg>

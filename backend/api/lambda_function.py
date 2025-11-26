@@ -423,7 +423,7 @@ def lambda_handler(event, context):
                 message = body.get('message', '')
                 to_email = body.get('to', 'trouttrackerinfo@gmail.com')
                 print(f"[Feedback] Payload received: name={name}, email={email}, message_len={len(message)}, to={to_email}")
-                print(f"[Feedback] Using feedback table: {feedback_table_name}")
+                print(f"[Feedback] Using feedback table: {FEEDBACK_TABLE_NAME}")
 
                 if not email or not message:
                     return {

@@ -69,6 +69,19 @@ COUNTY_ABBREVIATIONS = {
 }
 
 
+def _normalize_county_input(value: Optional[str]) -> Optional[str]:
+  if not value:
+    return None
+  cleaned = (
+    value.lower()
+    .replace("county", " ")
+    .replace("cnty", " ")
+  )
+  cleaned = re.sub(r"[^a-z\s]", " ", cleaned)
+  cleaned = re.sub(r"\s+", " ", cleaned).strip()
+  return cleaned or None
+
+
 def _detect_county_hint(raw_name: str) -> Optional[str]:
   uppercase = raw_name.upper()
   matches = re.findall(r"\(([A-Z]{3,5})\)", uppercase)
@@ -95,11 +108,12 @@ def _normalize_token(token: str) -> List[str]:
   return [lower]
 
 
-def normalize_name(raw_name: str) -> Dict[str, any]:
+def normalize_name(raw_name: str, explicit_county: Optional[str] = None) -> Dict[str, any]:
   if not isinstance(raw_name, str):
     return {"normalized": "", "tokens": [], "countyHint": None}
 
-  county_hint = _detect_county_hint(raw_name)
+  detected = _detect_county_hint(raw_name)
+  county_hint = _normalize_county_input(explicit_county) or _normalize_county_input(detected)
   working = (
     raw_name.replace("&", " and ")
     .replace("-", " ")

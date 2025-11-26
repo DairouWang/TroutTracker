@@ -23,16 +23,19 @@ lambda_client = boto3.client('lambda')
 LAKE_MATCHER_FUNCTION_NAME = os.environ.get('LAKE_MATCHER_FUNCTION_NAME')
 
 
-def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
+def invoke_lake_matcher(lake_name: str, county: Optional[str] = None) -> Optional[Dict]:
     """Invoke the Lake Matcher Lambda and return its payload."""
     if not lake_name or not LAKE_MATCHER_FUNCTION_NAME:
         return None
 
     try:
+        payload = {'wdfwName': lake_name}
+        if county:
+            payload['county'] = county
         response = lambda_client.invoke(
             FunctionName=LAKE_MATCHER_FUNCTION_NAME,
             InvocationType='RequestResponse',
-            Payload=json.dumps({'wdfwName': lake_name})
+            Payload=json.dumps(payload)
         )
         payload_stream = response.get('Payload')
         if not payload_stream:
@@ -369,14 +372,17 @@ def lambda_handler(event, context):
                 }
 
             requested_name = None
+            requested_county = None
             if http_method == 'GET':
                 requested_name = (query_params.get('wdfwName') or query_params.get('name') or '').strip()
+                requested_county = (query_params.get('county') or '').strip()
             else:
                 try:
                     body = json.loads(event.get('body', '{}'))
                 except json.JSONDecodeError:
                     body = {}
                 requested_name = (body.get('wdfwName') or body.get('name') or '').strip()
+                requested_county = (body.get('county') or '').strip()
 
             if not requested_name:
                 return {
@@ -388,7 +394,7 @@ def lambda_handler(event, context):
                     'body': json.dumps({'message': 'wdfwName parameter is required'})
                 }
 
-            match_result = invoke_lake_matcher(requested_name)
+            match_result = invoke_lake_matcher(requested_name, requested_county or None)
             if match_result is None:
                 return {
                     'statusCode': 502,

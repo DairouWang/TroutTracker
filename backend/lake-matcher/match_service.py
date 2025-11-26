@@ -8,6 +8,12 @@ from matcher import find_matching_lake
 from normalizer import normalize_name
 
 
+def _build_cache_key(lake_name: str, county_hint: Optional[str]) -> str:
+  if county_hint:
+    return f"{lake_name}|{county_hint}"
+  return lake_name
+
+
 def _serialize_decimal(value: Any) -> Any:
   if isinstance(value, Decimal):
     return float(value)
@@ -18,7 +24,7 @@ def _serialize_decimal(value: Any) -> Any:
   return value
 
 
-def match_lake_name(wdfw_name: str) -> Dict[str, Any]:
+def match_lake_name(wdfw_name: str, county: Optional[str] = None) -> Dict[str, Any]:
   if not wdfw_name or not isinstance(wdfw_name, str):
     raise ValueError("wdfwName must be a non-empty string")
 
@@ -30,15 +36,20 @@ def match_lake_name(wdfw_name: str) -> Dict[str, Any]:
   if manual:
     return manual
 
-  cached = check_cache(trimmed)
+  normalized = normalize_name(trimmed, explicit_county=county)
+  county_hint = normalized.get("countyHint")
+  cache_key = _build_cache_key(trimmed, county_hint)
+
+  cached = check_cache(cache_key)
+  if not cached and county_hint:
+    cached = check_cache(trimmed)
   if cached:
     return cached
 
-  normalized = normalize_name(trimmed)
   result = find_matching_lake(normalized)
 
   if result:
-    write_cache(trimmed, result)
+    write_cache(cache_key, result)
     return _serialize_decimal(result)
 
   return {

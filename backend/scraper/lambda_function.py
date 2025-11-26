@@ -417,7 +417,7 @@ GOOGLE_SEARCH_URL = "https://www.google.com/search"
 WDFW_TITLE_CACHE: Dict[Tuple[str, str], Optional[str]] = {}
 
 
-def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
+def invoke_lake_matcher(lake_name: str, county: Optional[str] = None) -> Optional[Dict]:
     """Invoke the Lake Matcher Lambda to resolve coordinates."""
     if not lake_name:
         return None
@@ -427,10 +427,13 @@ def invoke_lake_matcher(lake_name: str) -> Optional[Dict]:
 
     try:
         print(f"[LakeMatcher] Invoking {LAKE_MATCHER_FUNCTION_NAME} for '{lake_name}'")
+        payload = {'wdfwName': lake_name}
+        if county:
+            payload['county'] = county
         response = lambda_client.invoke(
             FunctionName=LAKE_MATCHER_FUNCTION_NAME,
             InvocationType='RequestResponse',
-            Payload=json.dumps({'wdfwName': lake_name})
+            Payload=json.dumps(payload)
         )
         payload_stream = response.get('Payload')
         if not payload_stream:
@@ -477,9 +480,9 @@ def geocode_lake(lake_name: str, county: str = "", canonical_hint: Optional[str]
 
     # Try deterministic lake matcher first
     print(f"[Geocode] Resolving '{lake_name}' (county={county or 'n/a'})")
-    matcher_result = invoke_lake_matcher(lake_name)
+    matcher_result = invoke_lake_matcher(lake_name, county)
     if (not matcher_result) and canonical_name and canonical_name != lake_name:
-        matcher_result = invoke_lake_matcher(canonical_name)
+        matcher_result = invoke_lake_matcher(canonical_name, county)
 
     if matcher_result and matcher_result.get('lat') is not None and matcher_result.get('lng') is not None:
         canonical_from_matcher = matcher_result.get('officialName') or canonical_name

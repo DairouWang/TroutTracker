@@ -2,35 +2,40 @@ import json
 from match_service import match_lake_name
 
 
-def _extract_lake_name(event):
-  if not event:
-    return None
+def _extract_params(event):
+  lake_name = None
+  county = None
+
+  def _apply_candidate(data):
+    nonlocal lake_name, county
+    if not isinstance(data, dict):
+      return
+    if not lake_name:
+      if data.get("wdfwName"):
+        lake_name = data["wdfwName"]
+      elif data.get("name"):
+        lake_name = data["name"]
+    if not county and data.get("county"):
+      county = data["county"]
+
   if isinstance(event, dict):
-    if event.get("wdfwName"):
-      return event["wdfwName"]
-    if event.get("name"):
-      return event["name"]
+    _apply_candidate(event)
     qs = event.get("queryStringParameters") or {}
-    if qs.get("wdfwName"):
-      return qs["wdfwName"]
-    if qs.get("name"):
-      return qs["name"]
+    _apply_candidate(qs)
     body = event.get("body")
     if body:
       try:
         payload = json.loads(body)
-        if payload.get("wdfwName"):
-          return payload["wdfwName"]
-        if payload.get("name"):
-          return payload["name"]
+        _apply_candidate(payload)
       except (json.JSONDecodeError, TypeError):
-        return None
-  return None
+        pass
+
+  return lake_name, county
 
 
 def handler(event, _context):
   try:
-    lake_name = _extract_lake_name(event)
+    lake_name, county = _extract_params(event or {})
     if not lake_name:
       return {
         "statusCode": 400,
@@ -38,7 +43,7 @@ def handler(event, _context):
         "body": json.dumps({"message": "Missing wdfwName parameter"})
       }
 
-    result = match_lake_name(lake_name)
+    result = match_lake_name(lake_name, county=county)
     return {
       "statusCode": 200,
       "headers": {"Access-Control-Allow-Origin": "*"},

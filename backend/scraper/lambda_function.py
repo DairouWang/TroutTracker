@@ -5,6 +5,7 @@ Scrapes trout stocking data from WDFW website and stores it in DynamoDB
 import json
 import os
 import math
+import re
 import boto3
 import requests
 from datetime import datetime
@@ -26,6 +27,62 @@ ACCESS_POINT_KEYWORDS = [
     'boat', 'launch', 'ramp', 'access', 'landing', 'marina', 'dock', 'parking', 'fishing'
 ]
 
+ABBREVIATION_REPLACEMENTS = [
+    (r'\bLk\b', 'Lake'),
+    (r'\bLks\b', 'Lakes'),
+    (r'\bMt\b', 'Mount'),
+    (r'\bMtn\b', 'Mountain'),
+    (r'\bCr\b', 'Creek'),
+    (r'\bPk\b', 'Peak'),
+    (r'\bPt\b', 'Point'),
+    (r'\bHbr\b', 'Harbor'),
+    (r'\bSt\b', 'Saint'),
+    (r'\bCtr\b', 'Center')
+]
+
+
+def expand_lake_name(name: str) -> str:
+    """Expand common abbreviations (e.g., Lk -> Lake) to help map searches."""
+    expanded = name or ''
+    for pattern, replacement in ABBREVIATION_REPLACEMENTS:
+        expanded = re.sub(pattern, replacement, expanded, flags=re.IGNORECASE)
+    # Collapse repeated whitespace
+    return " ".join(expanded.split())
+
+
+def build_lake_name_variants(name: str) -> List[str]:
+    """Return a list of name variants to improve geocoding/Places lookups."""
+    variants = []
+    base = (name or '').strip()
+    if base:
+        variants.append(base)
+    expanded = expand_lake_name(base)
+    if expanded and expanded.lower() != base.lower():
+        variants.append(expanded)
+
+    # Ensure we include a version that explicitly contains "Lake"
+    lower_base = base.lower()
+    if base and 'lake' not in lower_base:
+        variants.append(f"{base} Lake")
+        variants.append(f"Lake {base}")
+    if expanded and 'lake' not in expanded.lower():
+        variants.append(f"{expanded} Lake")
+
+    # Remove duplicates while preserving order
+    seen = set()
+    deduped = []
+    for variant in variants:
+        normalized = variant.strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+
+    return deduped or [name]
+
 # WDFW API endpoint (actual API discovered from network requests)
 # Note: WDFW website uses dynamic loading, data comes from backend API
 WDFW_API_URL = "https://wdfw.wa.gov/fishing/reports/stocking/trout-plants"
@@ -45,57 +102,62 @@ def geocode_lake(lake_name: str, county: str = "") -> Optional[Dict]:
     if not GOOGLE_GEOCODING_API_KEY:
         print("Warning: Google Geocoding API Key not set")
         return None
-    
-    try:
-        # Build search query - prioritize county, then state
-        search_query = f"{lake_name}, {county} County, Washington State, USA" if county else f"{lake_name}, Washington State, USA"
-        
-        url = "https://maps.googleapis.com/maps/api/geocode/json"
-        params = {
-            'address': search_query,
-            'key': GOOGLE_GEOCODING_API_KEY,
-            # Add bounds to restrict search to Washington State
-            # Washington State approximate bounds: 45.5°N to 49°N, -124.8°W to -116.9°W
-            'bounds': '45.5,-124.8|49.0,-116.9',
-            # Strict bounds to only return results within Washington State
-            'region': 'us'
-        }
-        
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        if data['status'] == 'OK' and len(data['results']) > 0:
-            result = data['results'][0]
-            location = result['geometry']['location']
-            
-            # Verify result is in Washington State
-            address_components = result.get('address_components', [])
-            is_in_washington = False
-            for component in address_components:
-                if 'administrative_area_level_1' in component.get('types', []):
-                    if component.get('short_name') == 'WA' or component.get('long_name') == 'Washington':
-                        is_in_washington = True
-                        break
-            
-            if not is_in_washington:
-                print(f"Geocoding result not in Washington State: {lake_name}")
-                return None
-            
-            return {
-                'lat': Decimal(str(location['lat'])),
-                'lng': Decimal(str(location['lng'])),
-                'source': 'lake_center',
-                'location_type': result.get('geometry', {}).get('location_type', 'APPROXIMATE')
+
+    name_variants = build_lake_name_variants(lake_name)
+
+    for variant in name_variants:
+        try:
+            # Build search query - prioritize county, then state
+            search_query = f"{variant}, {county} County, Washington State, USA" if county else f"{variant}, Washington State, USA"
+
+            url = "https://maps.googleapis.com/maps/api/geocode/json"
+            params = {
+                'address': search_query,
+                'key': GOOGLE_GEOCODING_API_KEY,
+                # Add bounds to restrict search to Washington State
+                # Washington State approximate bounds: 45.5°N to 49°N, -124.8°W to -116.9°W
+                'bounds': '45.5,-124.8|49.0,-116.9',
+                # Strict bounds to only return results within Washington State
+                'region': 'us'
             }
-        else:
-            print(f"Geocoding failed: {lake_name} - {data.get('status', 'UNKNOWN')}")
-            return None
-            
-    except Exception as e:
-        print(f"Geocoding error {lake_name}: {str(e)}")
-        return None
+
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if data['status'] == 'OK' and len(data['results']) > 0:
+                result = data['results'][0]
+                location = result['geometry']['location']
+
+                # Verify result is in Washington State
+                address_components = result.get('address_components', [])
+                is_in_washington = False
+                for component in address_components:
+                    if 'administrative_area_level_1' in component.get('types', []):
+                        if component.get('short_name') == 'WA' or component.get('long_name') == 'Washington':
+                            is_in_washington = True
+                            break
+
+                if not is_in_washington:
+                    print(f"Geocoding result not in Washington State: {variant}")
+                    continue
+
+                return {
+                    'lat': Decimal(str(location['lat'])),
+                    'lng': Decimal(str(location['lng'])),
+                    'source': 'lake_center',
+                    'location_type': result.get('geometry', {}).get('location_type', 'APPROXIMATE')
+                }
+            else:
+                print(f"Geocoding failed: {variant} - {data.get('status', 'UNKNOWN')}")
+                continue
+
+        except Exception as e:
+            print(f"Geocoding error {variant}: {str(e)}")
+            continue
+
+    return None
 
 
 def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -122,19 +184,28 @@ def find_lake_access_point(lake_name: str, county: str, lake_coordinates: Option
     except (KeyError, ValueError, TypeError):
         return None
 
-    search_queries = [
-        f"{lake_name} boat launch",
-        f"{lake_name} boat ramp",
-        f"{lake_name} boat launch parking",
+    name_variants = build_lake_name_variants(lake_name)
+
+    search_queries = []
+    for variant in name_variants:
+        search_queries.extend([
+            f"{variant} boat launch",
+            f"{variant} boat ramp",
+            f"{variant} boat launch parking",
+            f"{variant} fishing access"
+        ])
+
+    if county:
+        search_queries.insert(0, f"{name_variants[0]} {county} County boat launch")
+        search_queries.insert(1, f"{county} County boat launch")
+
+    # Generic backup queries
+    search_queries.extend([
         "boat launch",
         "boat ramp",
         "fishing access",
         "lake parking"
-    ]
-
-    if county:
-        search_queries.insert(0, f"{lake_name} {county} County boat launch")
-        search_queries.insert(1, f"{county} County boat launch")
+    ])
 
     allowed_types = {
         'boat_ramp',

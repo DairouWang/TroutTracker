@@ -89,9 +89,10 @@ const Sidebar = ({
             onChange={handleDaysChange}
             className="filter-select"
           >
+            <option value="1">Last 1 day</option>
+            <option value="3">Last 3 days</option>
             <option value="7">Last 7 days</option>
             <option value="30">Last 30 days</option>
-            <option value="60">Last 60 days</option>
             <option value="90">Last 90 days</option>
           </select>
         </div>
@@ -164,4 +165,3 @@ const Sidebar = ({
 }
 
 export default Sidebar
-

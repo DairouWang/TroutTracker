@@ -44,8 +44,7 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
         # Calculate date range
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        start_date_str = start_date.strftime('%b %d, %Y')
-        
+
         # Scan table (in production, should use GSI for more efficient queries)
         response = table.scan()
         items = response.get('Items', [])
@@ -55,17 +54,28 @@ def get_trout_plants(state: str = 'WA', days: int = 30) -> List[Dict]:
             response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
             items.extend(response.get('Items', []))
         
-        # Sort by date (newest first) - convert date string to datetime for proper sorting
+        # Parse stocking dates for filtering/sorting
         def parse_date(date_str):
             try:
                 return datetime.strptime(date_str, '%b %d, %Y')
-            except:
-                # Return a very old date for invalid dates so they appear at the end
-                return datetime(1900, 1, 1)
+            except Exception:
+                return None
+
+        # Keep only records that fall inside the requested time range
+        filtered_items = []
+        for item in items:
+            stock_date = parse_date(item.get('stock_date', ''))
+            if stock_date and start_date <= stock_date <= end_date:
+                filtered_items.append(item)
+
+        # Sort by date (newest first); invalid dates fall to the end
+        def sort_key(item):
+            stock_date = parse_date(item.get('stock_date', ''))
+            return stock_date or datetime(1900, 1, 1)
+
+        filtered_items.sort(key=sort_key, reverse=True)
         
-        items.sort(key=lambda x: parse_date(x.get('stock_date', '')), reverse=True)
-        
-        return items
+        return filtered_items
         
     except Exception as e:
         print(f"Error querying data: {str(e)}")

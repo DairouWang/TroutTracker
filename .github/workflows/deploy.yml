@@ -198,6 +198,25 @@ jobs:
           
           rm -f scraper.zip
 
+      - name: Trigger scraper run
+        run: |
+          SCRAPER_FUNCTION=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ScraperFunctionName`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          aws lambda invoke \
+            --function-name $SCRAPER_FUNCTION \
+            --payload '{}' \
+            --cli-read-timeout 600 \
+            --region ${{ env.AWS_REGION }} \
+            scraper-run.json
+
+          echo "Scraper invocation response:"
+          cat scraper-run.json
+          rm -f scraper-run.json
+
   deploy-lake-matcher:
     name: Deploy Lake Matcher Lambda
     runs-on: ubuntu-latest

@@ -35,8 +35,10 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
   })
 
-  const onLoad = useCallback((map) => {
-    setMap(map)
+  const onLoad = useCallback((mapInstance) => {
+    mapInstance.setCenter(DEFAULT_CENTER)
+    mapInstance.setZoom(DEFAULT_ZOOM)
+    setMap(mapInstance)
   }, [])
 
   const onUnmount = useCallback(() => {
@@ -60,6 +62,13 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
 
   const handleInfoWindowClose = () => {
     setActiveMarker(null)
+  }
+
+  const getMarkerAnimation = (plantId) => {
+    if (selectedPlant?.id !== plantId) {
+      return null
+    }
+    return window.google?.maps?.Animation?.BOUNCE || null
   }
 
   // Get marker color (based on species)
@@ -138,7 +147,7 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
               position={{ lat, lng }}
               onClick={() => handleMarkerClick(plant)}
               icon={getMarkerIcon(plant.species)}
-              animation={selectedPlant?.id === plant.id ? window.google.maps.Animation.BOUNCE : null}
+              animation={getMarkerAnimation(plant.id)}
             >
               {activeMarker === plant.id && (
                 <InfoWindow onCloseClick={handleInfoWindowClose}>

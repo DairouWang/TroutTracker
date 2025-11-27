@@ -12,7 +12,7 @@ const Home = () => {
   const [error, setError] = useState(null)
   const [stats, setStats] = useState(null)
   const [filters, setFilters] = useState({
-    days: 30,
+    days: 7,
     species: 'all',
     searchTerm: ''
   })

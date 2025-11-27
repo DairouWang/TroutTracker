@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api'
+import { trackDirectionClick } from '../services/analytics'
 import './Map.css'
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
@@ -220,6 +221,7 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="info-link"
+                          onClick={() => trackDirectionClick(plant)}
                         >
                           Open in Google Maps
                         </a>

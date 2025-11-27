@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { sendFeedback } from '../services/api'
+import { trackFeedbackSubmitted } from '../services/analytics'
 import './Feedback.css'
 
 const Feedback = () => {
@@ -33,6 +34,11 @@ const Feedback = () => {
         email: formData.email,
         message: formData.message,
         to: 'trouttrackerinfo@gmail.com'
+      })
+      trackFeedbackSubmitted({
+        hasName: Boolean(formData.name),
+        hasEmail: Boolean(formData.email),
+        messageLength: formData.message.length
       })
       setStatus({ type: 'success', message: 'Your feedback has been received.' })
       setFormData({ name: '', email: '', message: '' })
@@ -116,4 +122,3 @@ const Feedback = () => {
 }
 
 export default Feedback
-

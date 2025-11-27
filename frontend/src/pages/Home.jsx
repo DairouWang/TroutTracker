@@ -3,6 +3,7 @@ import Map from '../components/Map'
 import Sidebar from '../components/Sidebar'
 import StatsPanel from '../components/StatsPanel'
 import { getTroutPlants, getStatistics } from '../services/api'
+import { trackLakeClick } from '../services/analytics'
 
 const Home = () => {
   const [plants, setPlants] = useState([])
@@ -67,6 +68,7 @@ const Home = () => {
 
   const handlePlantSelect = (plant) => {
     setSelectedPlant(plant)
+    trackLakeClick(plant)
   }
 
   const toggleMobileView = () => {

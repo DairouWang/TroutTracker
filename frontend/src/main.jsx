@@ -1,15 +1,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import mixpanel from 'mixpanel-browser'
 import App from './App.jsx'
 import './index.css'
+import { initAnalytics } from './services/analytics'
 
-// Initialize Mixpanel Autocapture
-mixpanel.init('3cdea1dcd4fe1af85df5b75926c84954', {
-  autocapture: true,
-  record_sessions_percent: 100,
-})
+// Initialize Mixpanel Autocapture and user profile defaults
+initAnalytics()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -18,4 +15,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
-

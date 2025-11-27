@@ -1,5 +1,6 @@
 import React from 'react'
 import { format } from 'date-fns'
+import { trackFilteredByDate } from '../services/analytics'
 import './Sidebar.css'
 
 const Sidebar = ({ 
@@ -24,7 +25,9 @@ const Sidebar = ({
   }
 
   const handleDaysChange = (e) => {
-    onFilterChange({ days: parseInt(e.target.value) })
+    const value = parseInt(e.target.value)
+    onFilterChange({ days: value })
+    trackFilteredByDate(value)
   }
 
   const formatDate = (dateStr) => {

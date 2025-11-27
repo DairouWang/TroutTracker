@@ -51,4 +51,3 @@ const StatsPanel = ({ stats }) => {
 }
 
 export default StatsPanel
-

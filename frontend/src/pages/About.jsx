@@ -124,6 +124,18 @@ const About = () => {
 
         {/* Feedback & Disclaimer Grid */}
         <section className="about-grid-section">
+          <div className="about-card analytics-card">
+            <h3>Analytics & Privacy</h3>
+            <div className="story-content">
+              <p>
+                To keep TroutTracker fast and reliable, we use anonymous analytics to understand overall usage patterns — such as which lakes users view most often.
+              </p>
+              <p>
+                No personal information is stored, and we do not sell or share any data.
+              </p>
+            </div>
+          </div>
+
           <div className="about-card">
             <h3>Feedback Welcome</h3>
             <div className="story-content">

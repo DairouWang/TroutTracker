@@ -45,11 +45,19 @@ const Map = ({ plants, selectedPlant, onPlantSelect, loading, stats }) => {
     setMap(null)
   }, [])
 
-  // Keep the initial view centered on Washington unless a plant is selected
+  // Keep the view centered on Washington unless a plant is selected
   React.useEffect(() => {
-    if (map && !selectedPlant) {
-      map.panTo(DEFAULT_CENTER)
-      map.setZoom(DEFAULT_ZOOM)
+    if (map) {
+      const hasSelection = Boolean(selectedPlant && selectedPlant.coordinates)
+      const target = hasSelection
+        ? {
+            lat: parseFloat(selectedPlant.coordinates.lat),
+            lng: parseFloat(selectedPlant.coordinates.lng),
+          }
+        : DEFAULT_CENTER
+
+      map.panTo(target)
+      map.setZoom(hasSelection ? 12 : DEFAULT_ZOOM)
     }
   }, [map, selectedPlant])
 

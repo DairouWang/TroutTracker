@@ -111,8 +111,8 @@
 .map-fullscreen-toggle {
   display: none;
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: 0.75rem;
+  left: 0.75rem;
   z-index: 1100;
   background: rgba(255, 255, 255, 0.92);
   color: #0f172a;
@@ -293,7 +293,7 @@
   .home-view--map-fullscreen .map-fullscreen-toggle {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0) + 1rem);
-    right: calc(env(safe-area-inset-right, 0) + 1rem);
+    left: calc(env(safe-area-inset-left, 0) + 1rem);
     z-index: 2600;
   }
   

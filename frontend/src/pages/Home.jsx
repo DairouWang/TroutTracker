@@ -76,27 +76,23 @@ const Home = () => {
     setMobileView(prev => prev === 'map' ? 'list' : 'map')
   }
 
+  const isFullscreenActive = isMapFullscreen && mobileView === 'map'
+
   const toggleMapFullscreen = () => {
     setIsMapFullscreen(prev => !prev)
   }
 
   useEffect(() => {
-    if (mobileView === 'list' && isMapFullscreen) {
-      setIsMapFullscreen(false)
-    }
-  }, [mobileView, isMapFullscreen])
-
-  useEffect(() => {
-    if (!isMapFullscreen) return
+    if (!isFullscreenActive) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [isMapFullscreen])
+  }, [isFullscreenActive])
 
   return (
-    <div className={`home-view ${isMapFullscreen ? 'home-view--map-fullscreen' : ''}`}>
+    <div className={`home-view ${isFullscreenActive ? 'home-view--map-fullscreen' : ''}`}>
       <button
         className="mobile-view-toggle"
         onClick={toggleMobileView}
@@ -131,14 +127,14 @@ const Home = () => {
           className={mobileView === 'list' ? 'mobile-visible' : 'mobile-hidden'}
         />
 
-        <div className={`main-content ${mobileView === 'map' ? 'mobile-visible' : 'mobile-hidden'} ${isMapFullscreen ? 'main-content--fullscreen' : ''}`}>
+        <div className={`main-content ${mobileView === 'map' ? 'mobile-visible' : 'mobile-hidden'} ${isFullscreenActive ? 'main-content--fullscreen' : ''}`}>
           {mobileView === 'map' && (
             <button
-              className={`map-fullscreen-toggle ${isMapFullscreen ? 'active' : ''}`}
+              className={`map-fullscreen-toggle ${isFullscreenActive ? 'active' : ''}`}
               onClick={toggleMapFullscreen}
-              aria-label={isMapFullscreen ? 'Exit fullscreen map' : 'Enter fullscreen map'}
+              aria-label={isFullscreenActive ? 'Exit fullscreen map' : 'Enter fullscreen map'}
             >
-              {isMapFullscreen ? (
+              {isFullscreenActive ? (
                 <>
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l-3-3m0 0h2.25M6.75 6.75v2.25m7.5 7.5l3 3m0 0H15m3.75 0V17.25M9.75 14.25l-3 3m0 0H9m-2.25 0V15m9-9l3-3m0 0H15m3.75 0V6.75" />

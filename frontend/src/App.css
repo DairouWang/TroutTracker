@@ -108,6 +108,48 @@
   height: 1.25rem;
 }
 
+.map-fullscreen-toggle {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1100;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 25px -8px rgba(0, 0, 0, 0.2);
+  transition: all 0.25s ease;
+  align-items: center;
+  gap: 0.5rem;
+  backdrop-filter: blur(6px);
+}
+
+.map-fullscreen-toggle svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.map-fullscreen-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 35px -12px rgba(0, 0, 0, 0.25);
+}
+
+.map-fullscreen-toggle:active {
+  transform: translateY(0);
+}
+
+.map-fullscreen-toggle.active {
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: white;
+  box-shadow: 0 18px 30px -10px rgba(14, 165, 233, 0.45);
+}
+
 /* Mobile: Legend and Species Distribution */
 .mobile-legend-species {
   display: none;
@@ -186,6 +228,10 @@
     display: flex;
   }
 
+  .map-fullscreen-toggle {
+    display: flex;
+  }
+
   .app-content {
     position: relative;
   }
@@ -226,5 +272,33 @@
     background: #f8fafc;
     text-align: center;
     border-bottom: none;
+  }
+
+  .home-view--map-fullscreen {
+    background: #0b1222;
+  }
+  
+  .home-view--map-fullscreen .main-content {
+    background: transparent;
+  }
+
+  .home-view--map-fullscreen .mobile-view-toggle {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0) + 1.25rem);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2500;
+  }
+
+  .home-view--map-fullscreen .map-fullscreen-toggle {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0) + 1rem);
+    right: calc(env(safe-area-inset-right, 0) + 1rem);
+    z-index: 2600;
+  }
+  
+  .home-view--map-fullscreen .mobile-legend-species,
+  .home-view--map-fullscreen .data-update-info {
+    display: none !important;
   }
 }

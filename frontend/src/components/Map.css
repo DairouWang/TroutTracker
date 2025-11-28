@@ -164,4 +164,17 @@
   .map-legend-container {
     display: none;
   }
+
+  .home-view--map-fullscreen .map-container {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1800;
+    border-radius: 0;
+  }
+
+  .home-view--map-fullscreen .map-legend-container {
+    display: none;
+  }
 }

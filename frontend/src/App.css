@@ -51,6 +51,12 @@
   min-height: 0;
 }
 
+.map-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
 .data-update-info {
   font-size: 0.75rem;
   color: #64748b;
@@ -112,7 +118,7 @@
   display: none;
   position: absolute;
   top: 0.75rem;
-  left: 0.75rem;
+  right: 0.75rem;
   z-index: 1100;
   background: rgba(255, 255, 255, 0.92);
   color: #0f172a;
@@ -293,7 +299,7 @@
   .home-view--map-fullscreen .map-fullscreen-toggle {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0) + 1rem);
-    left: calc(env(safe-area-inset-left, 0) + 1rem);
+    right: calc(env(safe-area-inset-right, 0) + 1rem);
     z-index: 2600;
   }
   

@@ -128,30 +128,6 @@ const Home = () => {
         />
 
         <div className={`main-content ${mobileView === 'map' ? 'mobile-visible' : 'mobile-hidden'} ${isFullscreenActive ? 'main-content--fullscreen' : ''}`}>
-          {mobileView === 'map' && (
-            <button
-              className={`map-fullscreen-toggle ${isFullscreenActive ? 'active' : ''}`}
-              onClick={toggleMapFullscreen}
-              aria-label={isFullscreenActive ? 'Exit fullscreen map' : 'Enter fullscreen map'}
-            >
-              {isFullscreenActive ? (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l-3-3m0 0h2.25M6.75 6.75v2.25m7.5 7.5l3 3m0 0H15m3.75 0V17.25M9.75 14.25l-3 3m0 0H9m-2.25 0V15m9-9l3-3m0 0H15m3.75 0V6.75" />
-                  </svg>
-                  <span>Exit Full Map</span>
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v4.5m0 0L9.75 5.25M12 7.5l2.25-2.25M12 21v-4.5m0 0l2.25 2.25M12 16.5L9.75 18.75M21 12h-4.5m0 0L18.75 9.75M16.5 12l2.25 2.25M3 12h4.5m0 0L5.25 9.75M7.5 12l-2.25 2.25" />
-                  </svg>
-                  <span>Full Map</span>
-                </>
-              )}
-            </button>
-          )}
-
           {stats && (
             <>
               {/* Mobile-only update info, desktop uses header banner */}

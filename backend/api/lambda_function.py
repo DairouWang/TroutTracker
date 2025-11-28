@@ -421,7 +421,7 @@ def lambda_handler(event, context):
                 name = body.get('name', '')
                 email = body.get('email', '')
                 message = body.get('message', '')
-                to_email = body.get('to', 'trouttrackerinfo@gmail.com')
+                to_email = body.get('to', 'feedback@trouttracker.info')
                 print(f"[Feedback] Payload received: name={name}, email={email}, message_len={len(message)}, to={to_email}")
                 print(f"[Feedback] Using feedback table: {FEEDBACK_TABLE_NAME}")
 

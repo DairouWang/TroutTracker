@@ -33,7 +33,7 @@ const Feedback = () => {
         name: formData.name,
         email: formData.email,
         message: formData.message,
-        to: 'trouttrackerinfo@gmail.com'
+        to: 'feedback@trouttracker.info'
       })
       trackFeedbackSubmitted({
         hasName: Boolean(formData.name),

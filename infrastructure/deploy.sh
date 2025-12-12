@@ -38,9 +38,17 @@ if [ -z "$GOOGLE_GEOCODING_API_KEY" ]; then
     fi
 fi
 
-# If GOOGLE_MAPS_API_KEY is not set, use the same key
+# Ensure Google Maps API key is provided
 if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
-    GOOGLE_MAPS_API_KEY="$GOOGLE_GEOCODING_API_KEY"
+    # Allow passing as second argument for convenience
+    if [ -n "$2" ]; then
+        GOOGLE_MAPS_API_KEY="$2"
+        echo "Using command line argument as Google Maps API key"
+    else
+        echo "Error: Please set environment variable GOOGLE_MAPS_API_KEY"
+        echo "Or run: ./deploy.sh geocoding-key maps-key"
+        exit 1
+    fi
 fi
 
 echo "Step 1: Deploying CloudFormation stack..."

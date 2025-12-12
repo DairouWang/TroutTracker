@@ -382,7 +382,8 @@ jobs:
           
           MAPS_KEY="${{ secrets.GOOGLE_MAPS_API_KEY }}"
           if [ -z "$MAPS_KEY" ]; then
-            MAPS_KEY="${{ secrets.GOOGLE_GEOCODING_API_KEY }}"
+            echo "❌ GOOGLE_MAPS_API_KEY is required for frontend builds"
+            exit 1
           fi
           
           # Create .env.production

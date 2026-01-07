@@ -24,6 +24,7 @@ jobs:
   deploy-infrastructure:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
+    environment: dev
     outputs:
       api_endpoint: ${{ steps.get-outputs.outputs.api_endpoint }}
       frontend_bucket: ${{ steps.get-outputs.outputs.frontend_bucket }}
@@ -130,6 +131,7 @@ jobs:
     if: ${{ !((github.event_name == 'push' && contains(github.event.head_commit.message, '[skip scraper]')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_scraper == 'false')) }}
     name: Deploy Scraper Lambda
     runs-on: ubuntu-latest
+    environment: dev
     needs:
       - deploy-infrastructure
       - deploy-lake-matcher
@@ -226,6 +228,7 @@ jobs:
   deploy-lake-matcher:
     name: Deploy Lake Matcher Lambda
     runs-on: ubuntu-latest
+    environment: dev
     needs: deploy-infrastructure
     
     steps:
@@ -285,6 +288,7 @@ jobs:
   deploy-lambda-api:
     name: Deploy API Lambda
     runs-on: ubuntu-latest
+    environment: dev
     needs:
       - deploy-infrastructure
       - deploy-lake-matcher
@@ -355,6 +359,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend
     runs-on: ubuntu-latest
+    environment: dev
     needs: [deploy-infrastructure, deploy-lambda-api]
     
     steps:
